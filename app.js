@@ -627,11 +627,38 @@ function renderTask(date, task, idx) {
     li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
     li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
     li.addEventListener('dragleave', handleDragLeaveDay); li.addEventListener('drop', handleDropDay); li.addEventListener('dragend', handleDragEndDay);
+    
+    // Subtask HTML Build karna
+    let subtasksHTML = '';
+    if(task.subtasks && task.subtasks.length > 0) {
+        subtasksHTML = '<ul class="subtask-list">';
+        task.subtasks.forEach((st, sIdx) => {
+            subtasksHTML += `
+                <li class="subtask-item">
+                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
+                    <span class="subtask-text ${st.done ? 'done' : ''}" contenteditable="true" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${st.text}</span>
+                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
+                </li>
+            `;
+        });
+        subtasksHTML += '</ul>';
+    }
+
+    li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
+    
     li.innerHTML = `
-        <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
-        <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
-        <span class="task-text ${task.done ? 'done' : ''}" contenteditable="true" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}</span>
-        <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
+        <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+            <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
+            <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
+            <span class="task-text ${task.done ? 'done' : ''}" contenteditable="true" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}</span>
+            <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
+            <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
+        </div>
+        ${subtasksHTML}
+        <div class="subtask-input-container" id="st-in-cont-${date}-${idx}">
+            <input type="text" class="subtask-input" id="st-in-${date}-${idx}" placeholder="NEW SUBTASK..." onkeydown="if(event.key==='Enter') addSubtask('${date}', ${idx})">
+            <button class="add-btn" style="padding: 4px 10px; font-size: 0.65rem;" onclick="addSubtask('${date}', ${idx})">+</button>
+        </div>
     `;
     document.getElementById(`list-${date}`).appendChild(li);
 }
@@ -652,10 +679,14 @@ function cyclePriority(dot, date, idx) {
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(task) {
-        task.done = !task.done; checkboxElement.classList.toggle('checked', task.done);
-        checkboxElement.nextElementSibling.classList.toggle('done', task.done);
+        task.done = !task.done; 
+        // Agar main task done/undone hota hai, toh saare subtasks bhi change honge
+        if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
+        
+        save(); 
+        const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
         if (task.done) confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
-        updateProgress(date); save(); calculateStreak();
+        updateProgress(date); calculateStreak();
     }
 }
 
@@ -969,4 +1000,53 @@ if ('serviceWorker' in navigator) {
             .then(reg => console.log('Service Worker Registered! 🚀', reg))
             .catch(err => console.log('Service Worker failed! ❌', err));
     });
+}
+
+/* --- NEBULA SYNC: SUBTASK LOGIC --- */
+function toggleSubtaskInput(date, idx) {
+    const cont = document.getElementById(`st-in-cont-${date}-${idx}`);
+    cont.classList.toggle('show');
+    if(cont.classList.contains('show')) document.getElementById(`st-in-${date}-${idx}`).focus();
+}
+
+function addSubtask(date, idx) {
+    const input = document.getElementById(`st-in-${date}-${idx}`);
+    const text = input.value.trim().toUpperCase(); if(!text) return;
+    
+    if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
+    dailyData[date][idx].subtasks.push({ text: text, done: false });
+    dailyData[date][idx].done = false; // Naya task add hone par main task incomplete ho jayega
+    
+    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    updateProgress(date); calculateStreak();
+}
+
+function handleSubtaskCheck(date, tIdx, sIdx) {
+    let st = dailyData[date][tIdx].subtasks[sIdx];
+    st.done = !st.done;
+    
+    // Check karo ki kya saare subtasks complete ho gaye hain
+    let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
+    dailyData[date][tIdx].done = allDone; // Auto sync main task
+    
+    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    updateProgress(date); calculateStreak();
+    if (st.done) confetti({ particleCount: 20, spread: 40 });
+}
+
+function editSubtask(date, tIdx, sIdx, element) {
+    let text = element.innerText.trim().toUpperCase();
+    if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
+    dailyData[date][tIdx].subtasks[sIdx].text = text; save();
+}
+
+function removeSubtask(date, tIdx, sIdx) {
+    dailyData[date][tIdx].subtasks.splice(sIdx, 1);
+    // Agar bache hue saare subtasks done hain, toh main ko bhi done kardo
+    if(dailyData[date][tIdx].subtasks.length > 0) {
+        let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
+        dailyData[date][tIdx].done = allDone;
+    }
+    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    updateProgress(date); calculateStreak();
 }
