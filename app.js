@@ -630,8 +630,13 @@ function renderTask(date, task, idx) {
     
     // Subtask HTML Build karna
     let subtasksHTML = '';
-    if(task.subtasks && task.subtasks.length > 0) {
-        subtasksHTML = '<ul class="subtask-list">';
+    let hasSubtasks = task.subtasks && task.subtasks.length > 0;
+    
+    // Toggle Button (Retractable Arrow)
+    let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
+    
+    if(hasSubtasks) {
+        subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
         task.subtasks.forEach((st, sIdx) => {
             subtasksHTML += `
                 <li class="subtask-item">
@@ -650,6 +655,7 @@ function renderTask(date, task, idx) {
         <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
             <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
             <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
+            ${toggleBtnHTML}
             <span class="task-text ${task.done ? 'done' : ''}" contenteditable="true" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}</span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
@@ -1003,6 +1009,14 @@ if ('serviceWorker' in navigator) {
 }
 
 /* --- NEBULA SYNC: SUBTASK LOGIC --- */
+function toggleSubtaskList(date, idx) {
+    let task = dailyData[date][idx];
+    task.stCollapsed = !task.stCollapsed; // State save ho jayegi!
+    save();
+    const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
+    dailyData[date].forEach((t, i) => renderTask(date, t, i));
+}
+
 function toggleSubtaskInput(date, idx) {
     const cont = document.getElementById(`st-in-cont-${date}-${idx}`);
     cont.classList.toggle('show');
@@ -1016,6 +1030,7 @@ function addSubtask(date, idx) {
     if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
     dailyData[date][idx].subtasks.push({ text: text, done: false });
     dailyData[date][idx].done = false; // Naya task add hone par main task incomplete ho jayega
+    dailyData[date][idx].stCollapsed = false; // Naya subtask add karte waqt list open ho jayegi
     
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();

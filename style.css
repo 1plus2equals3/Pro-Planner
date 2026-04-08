@@ -126,13 +126,15 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
 .mode-btn.active { background: var(--primary); color: #000; border-color: var(--primary); box-shadow: 0 0 20px rgba(162,155,254,0.6); }
 
 /* --- NEBULA SYNC: SUBTASKS STYLES --- */
-.subtask-list { padding-left: 35px; margin-top: 5px; margin-bottom: 5px; list-style: none; width: 100%;}
-.subtask-item { background: transparent; padding: 4px 8px; margin-bottom: 4px; border: none; font-size: 0.65rem; color: rgba(255,255,255,0.7); box-shadow: none; display: flex; align-items: center; gap: 8px;}
+.subtask-list { padding-left: 35px; margin-top: 5px; margin-bottom: 5px; list-style: none; width: 100%; transition: all 0.3s ease;}
+.subtask-item { background: transparent; padding: 4px 8px; margin-bottom: 4px; border: none; font-size: 0.7rem; color: rgba(255,255,255,0.9); box-shadow: none; display: flex; align-items: center; gap: 8px;}
 .subtask-item:hover { background: rgba(255,255,255,0.05); transform: none; border-color: transparent;}
 .subtask-input-container { display: flex; padding-left: 35px; margin-top: 2px; margin-bottom: 8px; gap: 5px; display: none; width: 100%;}
 .subtask-input-container.show { display: flex; animation: fadeIn 0.2s ease;}
 .subtask-input { flex-grow: 1; padding: 6px 10px !important; font-size: 0.65rem !important; border-radius: 6px !important; background: rgba(0,0,0,0.5) !important; border: 1px dashed rgba(255,255,255,0.2) !important; color: white !important;}
 .add-subtask-btn { background: none; border: none; color: var(--primary); font-size: 1.2rem; cursor: pointer; opacity: 0.5; transition: 0.2s; font-weight: bold; padding: 0 5px;}
 .add-subtask-btn:hover { opacity: 1; transform: scale(1.2); text-shadow: 0 0 10px var(--primary);}
-.subtask-text { flex-grow: 1; outline: none; transition: 0.3s; }
+.collapse-subtask-btn { background: none; border: none; color: var(--primary); font-size: 0.65rem; cursor: pointer; opacity: 0.7; transition: 0.2s; padding: 0 4px; margin-right: -4px;}
+.collapse-subtask-btn:hover { opacity: 1; transform: scale(1.2); text-shadow: 0 0 10px var(--primary);}
+.subtask-text { flex-grow: 1; outline: none; transition: 0.3s; font-weight: 800; letter-spacing: 0.5px;}
 .subtask-text.done { text-decoration: line-through; color: rgba(255,255,255,0.3); font-style: italic;}
