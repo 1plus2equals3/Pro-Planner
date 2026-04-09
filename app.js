@@ -427,16 +427,38 @@ function saveSettings() {
     if(!isRunning) setTimerMode(currentMode);
 }
 
+/* --- AESTHETIC UPGRADE: TIME-OF-DAY DYNAMIC BACKGROUND --- */
 let bgInterval;
 function initBackground() {
     const bgContainer = document.getElementById('bgContainer');
     bgContainer.innerHTML = ''; clearInterval(bgInterval);
-    const gradients = [
-        'linear-gradient(135deg, #1f005c, #5b0060, #870160)', 
-        'linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 
-        'linear-gradient(135deg, #141e30, #243b55)',         
-        'linear-gradient(135deg, #23074d, #cc5333)'          
-    ];
+    
+    const hour = new Date().getHours();
+    let gradients = [];
+
+    if (hour >= 6 && hour < 12) {
+        // MORNING: Sunrise Energy (Warm Purple & Deep Orange)
+        gradients = [
+            'linear-gradient(135deg, #1a0b2e, #4b1d52)', 
+            'linear-gradient(135deg, #2b0f4c, #60214f)',
+            'linear-gradient(135deg, #1f0b38, #59233f)'
+        ];
+    } else if (hour >= 12 && hour < 18) {
+        // AFTERNOON: Clean Focus (Deep Teals & Blues)
+        gradients = [
+            'linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 
+            'linear-gradient(135deg, #141e30, #243b55)',
+            'linear-gradient(135deg, #0d1b2a, #1b263b)'
+        ];
+    } else {
+        // NIGHT: Cyberpunk Dark Mode (Deep Blacks & Subtle Neon Purples)
+        gradients = [
+            'linear-gradient(135deg, #050505, #12001c, #0a001a)', 
+            'linear-gradient(135deg, #000000, #0f0c29, #302b63)',
+            'linear-gradient(135deg, #050505, #1a001a)'
+        ];
+    }
+
     gradients.forEach((grad, i) => {
         const div = document.createElement('div');
         div.className = `bg-slide ${i === 0 ? 'bg-active' : ''}`;
