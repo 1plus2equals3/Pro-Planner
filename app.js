@@ -437,21 +437,21 @@ function initBackground() {
     let gradients = [];
 
     if (hour >= 6 && hour < 12) {
-        // MORNING: Sunrise Energy (Warm Purple & Deep Orange)
+        // MORNING: Sunrise Energy
         gradients = [
             'linear-gradient(135deg, #1a0b2e, #4b1d52)', 
             'linear-gradient(135deg, #2b0f4c, #60214f)',
             'linear-gradient(135deg, #1f0b38, #59233f)'
         ];
     } else if (hour >= 12 && hour < 18) {
-        // AFTERNOON: Clean Focus (Deep Teals & Blues)
+        // AFTERNOON: Clean Focus
         gradients = [
             'linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 
             'linear-gradient(135deg, #141e30, #243b55)',
             'linear-gradient(135deg, #0d1b2a, #1b263b)'
         ];
     } else {
-        // NIGHT: Cyberpunk Dark Mode (Deep Blacks & Subtle Neon Purples)
+        // NIGHT: Cyberpunk Dark Mode
         gradients = [
             'linear-gradient(135deg, #050505, #12001c, #0a001a)', 
             'linear-gradient(135deg, #000000, #0f0c29, #302b63)',
@@ -723,6 +723,7 @@ function cyclePriority(dot, date, idx) {
     sortTasks(date); save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
 }
 
+/* --- UPDATED CHECK LOGIC: GROUNDED CELEBRATION & NO LAG --- */
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(task) {
@@ -734,19 +735,20 @@ function handleCheck(date, idx, checkboxElement) {
         const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
         updateProgress(date); calculateStreak();
 
-        // CELEBRATION LOGIC
         let totalTasks = dailyData[date].length;
         let doneTasks = dailyData[date].filter(t => t.done).length;
 
         if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
-            // Big Confetti Blast
-            confetti({ particleCount: 300, spread: 120, origin: { y: 0.5 }, zIndex: 9999 });
-            // Motivation Alert
+            // OPTIMIZED FIREWORKS (Zero Lag, Subtler)
+            confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
+            setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
+            setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
+            
+            // Grounded Motivation Alert
             setTimeout(() => {
-                alert("🔥 100% TASKS DESTROYED! 🔥\n\nBEAST MODE: ON! You have completely crushed today's targets. Carry this exact same relentless energy into tomorrow!");
-            }, 400);
+                alert("✅ 100% COMPLETE.\n\nSolid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.");
+            }, 800);
         } else if (task.done) {
-            // Normal small confetti
             confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
         }
     }
@@ -1092,29 +1094,30 @@ function addSubtask(date, idx) {
     updateProgress(date); calculateStreak();
 }
 
+/* --- UPDATED SUBTASK CHECK LOGIC: GROUNDED CELEBRATION & NO LAG --- */
 function handleSubtaskCheck(date, tIdx, sIdx) {
     let st = dailyData[date][tIdx].subtasks[sIdx];
     st.done = !st.done;
     
-    // Check karo ki kya saare subtasks complete ho gaye hain
     let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
-    dailyData[date][tIdx].done = allDone; // Auto sync main task
+    dailyData[date][tIdx].done = allDone; 
     
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();
 
-    // CELEBRATION LOGIC FOR SUBTASKS
     let totalTasks = dailyData[date].length;
     let doneTasks = dailyData[date].filter(t => t.done).length;
 
     if (st.done && allDone && totalTasks > 0 && doneTasks === totalTasks) {
-        // Big Confetti Blast
-        confetti({ particleCount: 300, spread: 120, origin: { y: 0.5 }, zIndex: 9999 });
+        // OPTIMIZED FIREWORKS
+        confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
+        setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
+        setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
+        
         setTimeout(() => {
-            alert("🔥 100% TASKS DESTROYED! 🔥\n\nBEAST MODE: ON! You have completely crushed today's targets. Carry this exact same relentless energy into tomorrow!");
-        }, 400);
+            alert("✅ 100% COMPLETE.\n\nSolid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.");
+        }, 800);
     } else if (st.done) {
-        // Normal small confetti
         confetti({ particleCount: 20, spread: 40 });
     }
 }
@@ -1127,7 +1130,6 @@ function editSubtask(date, tIdx, sIdx, element) {
 
 function removeSubtask(date, tIdx, sIdx) {
     dailyData[date][tIdx].subtasks.splice(sIdx, 1);
-    // Agar bache hue saare subtasks done hain, toh main ko bhi done kardo
     if(dailyData[date][tIdx].subtasks.length > 0) {
         let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
         dailyData[date][tIdx].done = allDone;
