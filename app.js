@@ -496,18 +496,37 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
+/* --- BEAST MODE v2: 70% THRESHOLD & -2 PENALTY --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
-    let d = new Date(); d.setDate(d.getDate() - 1); let streak = 0;
-    const isSuccessful = (tasks) => {
-        if (!tasks || tasks.length === 0) return false;
-        const doneCount = tasks.filter(t => t.done).length; return (doneCount / tasks.length) * 100 >= 60;
-    };
-    while (true) {
-        let dateStr = d.toISOString().split('T')[0];
-        if (isSuccessful(dailyData[dateStr])) { streak++; d.setDate(d.getDate() - 1); } else { break; }
-    }
-    if (isSuccessful(dailyData[todayStr])) streak++; 
+    let streak = 0;
+    
+    const sortedDates = Object.keys(dailyData).sort();
+
+    sortedDates.forEach(dateStr => {
+        let tasks = dailyData[dateStr];
+        
+        if (!tasks || tasks.length === 0) return; 
+
+        let totalTasks = tasks.length;
+        let doneCount = tasks.filter(t => t.done).length;
+        let completionPercentage = (doneCount / totalTasks) * 100;
+        let isSuccess = completionPercentage >= 70;
+
+        if (dateStr < todayStr) {
+            if (isSuccess) {
+                streak += 1; 
+            } else {
+                streak -= 2; 
+                if (streak < 0) streak = 0; 
+            }
+        } else if (dateStr === todayStr) {
+            if (isSuccess) {
+                streak += 1;
+            }
+        }
+    });
+
     document.getElementById('streakCount').innerText = streak;
 }
 
@@ -686,13 +705,28 @@ function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(task) {
         task.done = !task.done; 
-        // Agar main task done/undone hota hai, toh saare subtasks bhi change honge
+        
         if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
         
         save(); 
         const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
-        if (task.done) confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
         updateProgress(date); calculateStreak();
+
+        // CELEBRATION LOGIC
+        let totalTasks = dailyData[date].length;
+        let doneTasks = dailyData[date].filter(t => t.done).length;
+
+        if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
+            // Big Confetti Blast
+            confetti({ particleCount: 300, spread: 120, origin: { y: 0.5 }, zIndex: 9999 });
+            // Motivation Alert
+            setTimeout(() => {
+                alert("🔥 100% TASKS DESTROYED! 🔥\n\nBEAST MODE: ON! You have completely crushed today's targets. Carry this exact same relentless energy into tomorrow!");
+            }, 400);
+        } else if (task.done) {
+            // Normal small confetti
+            confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
+        }
     }
 }
 
@@ -1046,7 +1080,21 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
     
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();
-    if (st.done) confetti({ particleCount: 20, spread: 40 });
+
+    // CELEBRATION LOGIC FOR SUBTASKS
+    let totalTasks = dailyData[date].length;
+    let doneTasks = dailyData[date].filter(t => t.done).length;
+
+    if (st.done && allDone && totalTasks > 0 && doneTasks === totalTasks) {
+        // Big Confetti Blast
+        confetti({ particleCount: 300, spread: 120, origin: { y: 0.5 }, zIndex: 9999 });
+        setTimeout(() => {
+            alert("🔥 100% TASKS DESTROYED! 🔥\n\nBEAST MODE: ON! You have completely crushed today's targets. Carry this exact same relentless energy into tomorrow!");
+        }, 400);
+    } else if (st.done) {
+        // Normal small confetti
+        confetti({ particleCount: 20, spread: 40 });
+    }
 }
 
 function editSubtask(date, tIdx, sIdx, element) {
