@@ -146,7 +146,7 @@ li.missed-task span { text-decoration: line-through; text-decoration-color: var(
 #reportModalContent, #statsContent, #examList {
     overflow-y: auto;
     flex-shrink: 1;
-    padding-right: 5px;
+    padding-right: 5px;a
     margin-bottom: 15px;
 }
 
@@ -181,3 +181,16 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
 .collapse-subtask-btn:hover { opacity: 1; transform: scale(1.3); text-shadow: 0 0 15px var(--primary);}
 .subtask-text { flex-grow: 1; outline: none; transition: 0.3s; font-weight: 800; letter-spacing: 0.5px;}
 .subtask-text.done { text-decoration: line-through; color: rgba(255,255,255,0.3); font-style: italic;}
+/* 🎯 PERFECT CENTERING FIX FOR WIDE MODAL BUTTONS */
+.modal-card button[onclick*="close"],
+.modal-card button[onclick*="save"],
+.modal-card button[onclick*="Close"] {
+    display: flex !important;
+    justify-content: center !important;
+    align-items: center !important;
+    text-align: center !important;
+    padding: 14px !important; 
+    height: auto !important;
+    line-height: 1 !important;
+    margin-top: 10px !important;
+}
