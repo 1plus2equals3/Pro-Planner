@@ -112,7 +112,8 @@ let settings = {
     soundType: parsedSettings.soundType || 'classic',
     notificationsEnabled: parsedSettings.notificationsEnabled || false,
     workMsg: parsedSettings.workMsg || "TIME FOR A BREAK! ☕",
-    breakMsg: parsedSettings.breakMsg || "BACK TO WORK! 🚀"
+    breakMsg: parsedSettings.breakMsg || "BACK TO WORK! 🚀",
+    hundredPercentMsg: parsedSettings.hundredPercentMsg || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues."
 };
 
 const motivationalQuotes = [
@@ -384,6 +385,9 @@ function applySettings() {
     document.getElementById('workMsgInput').value = settings.workMsg || "TIME FOR A BREAK! ☕";
     document.getElementById('breakMsgInput').value = settings.breakMsg || "BACK TO WORK! 🚀";
     
+    let hInput = document.getElementById('hundredMsgInput');
+    if(hInput) hInput.value = settings.hundredPercentMsg;
+    
     document.querySelectorAll('.color-swatch').forEach(s => {
         if(s.style.background === settings.theme) s.classList.add('active');
     });
@@ -419,6 +423,9 @@ function saveSettings() {
     settings.workMsg = document.getElementById('workMsgInput').value.trim() || "TIME FOR A BREAK! ☕";
     settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "BACK TO WORK! 🚀";
 
+    let hInput = document.getElementById('hundredMsgInput');
+    if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
+
     localStorage.setItem('vibeSettings', JSON.stringify(settings));
     syncToFirebase();
 
@@ -437,21 +444,18 @@ function initBackground() {
     let gradients = [];
 
     if (hour >= 6 && hour < 12) {
-        // MORNING: Sunrise Energy
         gradients = [
             'linear-gradient(135deg, #1a0b2e, #4b1d52)', 
             'linear-gradient(135deg, #2b0f4c, #60214f)',
             'linear-gradient(135deg, #1f0b38, #59233f)'
         ];
     } else if (hour >= 12 && hour < 18) {
-        // AFTERNOON: Clean Focus
         gradients = [
             'linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 
             'linear-gradient(135deg, #141e30, #243b55)',
             'linear-gradient(135deg, #0d1b2a, #1b263b)'
         ];
     } else {
-        // NIGHT: Cyberpunk Dark Mode
         gradients = [
             'linear-gradient(135deg, #050505, #12001c, #0a001a)', 
             'linear-gradient(135deg, #000000, #0f0c29, #302b63)',
@@ -723,7 +727,27 @@ function cyclePriority(dot, date, idx) {
     sortTasks(date); save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
 }
 
-/* --- UPDATED CHECK LOGIC: GROUNDED CELEBRATION & NO LAG --- */
+/* --- IN-APP CUSTOM CELEBRATION POPUP --- */
+function showCelebrationModal() {
+    let modal = document.getElementById('celebModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'celebModal';
+        modal.className = 'modal-overlay custom-celeb-overlay';
+        modal.innerHTML = `
+            <div class="modal-card celeb-card">
+                <h2>🏆 BEAST MODE ACTIVATED</h2>
+                <p id="celebMsgText" style="text-align:center; font-size: 0.85rem; line-height: 1.6; color: rgba(255,255,255,0.8); margin-bottom: 25px; font-weight: 800; letter-spacing: 1px; white-space: pre-wrap;"></p>
+                <button class="action-btn accent" style="width: 100%; padding: 14px; font-size: 0.9rem;" onclick="closeModal('celebModal')">STAY HARD 🔥</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    document.getElementById('celebMsgText').innerText = settings.hundredPercentMsg;
+    openModal('celebModal');
+}
+
+/* --- UPDATED CHECK LOGIC: CUSTOM POPUP --- */
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(task) {
@@ -739,14 +763,12 @@ function handleCheck(date, idx, checkboxElement) {
         let doneTasks = dailyData[date].filter(t => t.done).length;
 
         if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
-            // OPTIMIZED FIREWORKS (Zero Lag, Subtler)
             confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
             setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
             setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
             
-            // Grounded Motivation Alert
             setTimeout(() => {
-                alert("✅ 100% COMPLETE.\n\nSolid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.");
+                showCelebrationModal();
             }, 800);
         } else if (task.done) {
             confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
@@ -1094,7 +1116,6 @@ function addSubtask(date, idx) {
     updateProgress(date); calculateStreak();
 }
 
-/* --- UPDATED SUBTASK CHECK LOGIC: GROUNDED CELEBRATION & NO LAG --- */
 function handleSubtaskCheck(date, tIdx, sIdx) {
     let st = dailyData[date][tIdx].subtasks[sIdx];
     st.done = !st.done;
@@ -1109,13 +1130,12 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
     let doneTasks = dailyData[date].filter(t => t.done).length;
 
     if (st.done && allDone && totalTasks > 0 && doneTasks === totalTasks) {
-        // OPTIMIZED FIREWORKS
         confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
         setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
         setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
         
         setTimeout(() => {
-            alert("✅ 100% COMPLETE.\n\nSolid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.");
+            showCelebrationModal();
         }, 800);
     } else if (st.done) {
         confetti({ particleCount: 20, spread: 40 });

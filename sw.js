@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pro-planner-v9'; // Future mein update ke liye v3, v4 kar dena
+const CACHE_NAME = 'pro-planner-v10'; // Future mein update ke liye v3, v4 kar dena
 const ASSETS = [
   './',
   './index.html',
