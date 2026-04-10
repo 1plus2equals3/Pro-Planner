@@ -3,195 +3,231 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pro Planner | Beast Mode</title>
+    
+    <link rel="manifest" href="./manifest.json">
+    <link rel="icon" type="image/png" href="./icon.png">
+    
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#000000">
+
+    <title>Planner</title>
+    
     <link rel="stylesheet" href="style.css">
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
-    <div id="bgContainer" class="bg-container"></div>
-    <div class="bg-overlay"></div>
 
-    <header>
-        <h1>PRO PLANNER</h1>
-        <div style="display: flex; gap: 15px; align-items: center;">
-            <span id="streakCount" class="streak-badge">0</span>🔥
-            <div class="dropdown-container">
-                <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)">MENU ▼</button>
-                <div id="dataDropdown" class="dropdown-menu">
-                    <button class="dropdown-item" onclick="openModal('settingsModal')">⚙️ SETTINGS</button>
-                    <button class="dropdown-item" onclick="openModal('statsModal')">📊 STATS</button>
-                    <button class="dropdown-item" onclick="openModal('examModal')">🎯 EXAMS</button>
-                    <button class="dropdown-item" onclick="manualArchive()">📦 ARCHIVE MONTH</button>
-                    <button class="dropdown-item" onclick="exportBackup()">💾 BACKUP</button>
-                    <label class="dropdown-item" style="cursor: pointer;">
-                        📂 IMPORT <input type="file" id="importFile" style="display:none;" onchange="importBackup(event)">
-                    </label>
-                    <button id="authBtnModal" class="dropdown-item" onclick="toggleAuth()">🔒 LOGIN</button>
-                </div>
+<div class="bg-container" id="bgContainer"></div>
+<div class="bg-overlay" id="bgOverlay"></div>
+
+<header>
+    <h1>PRO PLANNER</h1>
+    <div class="controls-row" id="navControlsRow">
+        <div class="streak-badge draggable-nav" id="nav-streak" draggable="true">🔥 <span id="streakCount">0</span></div>
+        <button class="action-btn draggable-nav" id="nav-timer" draggable="true" onclick="openModal('pomodoroModal')">⏱️ TIMER</button>
+        <button class="action-btn draggable-nav" id="nav-exams" draggable="true" onclick="openModal('examModal')">🎯 EXAMS</button>
+        <button class="action-btn draggable-nav" id="nav-stats" draggable="true" onclick="openModal('statsModal')">📊 STATS</button>
+        
+        <div class="dropdown-container draggable-nav" id="nav-data-menu" draggable="true">
+            
+            <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)" style="font-size: 1.1rem; padding: 4px 10px;">⋮</button>
+            <div class="dropdown-menu" id="dataDropdown">
+                <button class="dropdown-item" onclick="exportBackup()">💾 BACKUP DATA</button>
+                <button class="dropdown-item" onclick="document.getElementById('importFile').click()">📂 RESTORE DATA</button>
             </div>
         </div>
-    </header>
 
-    <div class="quote-banner" id="quoteBanner">"LOADING..."</div>
+        <button class="action-btn accent draggable-nav" id="nav-settings" draggable="true" onclick="openModal('settingsModal')">⚙️ SETTINGS</button>
+   
+        <input type="file" id="importFile" style="display:none" accept=".json" onchange="importBackup(event)">
+    </div>
+</header>
+<div class="quote-banner" id="quoteBanner">LOADING MOTIVATION...</div>
 
-    <div style="text-align: center; margin-top: 20px;">
+<div class="daily-wrapper">
+    <div class="date-selector-area">
+        DATE: <input type="date" id="datePicker">
+        <button class="add-btn" onclick="createDay(true)">+ ADD DAY</button>
+        <span style="margin: 0 15px; opacity: 0.2; font-size: 1.2rem; font-weight: 300;">|</span>
+        MONTH: <input type="month" id="monthPicker">
+        <button class="add-btn" onclick="createMonth()">+ ADD MONTH</button>
+    </div>
+
+    <div class="nav-controls">
+        <button class="arrow" onclick="scrollTimeline(-450)">←</button>
+        <button class="action-btn accent" style="padding: 8px 20px; font-size: 0.75rem;" onclick="scrollToToday()">🎯 JUMP TO TODAY</button>
+        <button class="arrow" onclick="scrollTimeline(450)">→</button>
+    </div>
+    
+    <div id="daily-container"></div>
+</div>
+
+<div class="bottom-goals">
+    <div class="card" style="height: 340px;">
+        <h2>🗓️ MONTHLY FOCUS</h2>
+        <div class="input-group">
+            <input type="text" id="in-month" placeholder="NEW GOAL..." onkeydown="if(event.key==='Enter') addGoal('month')">
+            <button class="add-btn" onclick="addGoal('month')">ADD</button>
+        </div>
+     
+        <ul id="list-month"></ul>
+    </div>
+    <div class="card" style="height: 340px;">
+        <h2>🏆 YEARLY VISION</h2>
+        <div class="input-group">
+            <input type="text" id="in-year" placeholder="BIG PICTURE..." onkeydown="if(event.key==='Enter') addGoal('year')">
+            <button class="add-btn" onclick="addGoal('year')">ADD</button>
+        </div>
+        <ul id="list-year"></ul>
+    </div>
+    <div class="card" style="height: 340px;">
+      
+        <h2>📈 ARCHIVES</h2>
+        <div id="report-list" style="overflow-y: auto; flex-grow: 1; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);"></div>
+        <button class="add-btn" onclick="manualArchive()" style="width: 100%; font-size: 0.75rem;">GENERATE PREV MONTH REPORT</button>
+    </div>
+</div>
+
+<div id="settingsModal" class="modal-overlay">
+    <div class="modal-card" style="position: relative; max-height: 85vh; overflow-y: auto;">
+        <button onclick="closeModal('settingsModal')" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: rgba(255,255,255,0.4); font-size: 1.5rem; cursor: pointer; transition: 0.2s;" onmouseover="this.style.transform='scale(1.2)'; this.style.color='#ff7675'" onmouseout="this.style.transform='scale(1)'; this.style.color='rgba(255,255,255,0.4)'">✖</button>
+        <h2>⚙️ SETTINGS</h2>
+        
+        <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                <span style="color: var(--primary); text-shadow: 0 0 10px rgba(162, 155, 254, 0.3); font-weight: 900;">☁️ CLOUD SYNC</span>
+                <span id="syncStatus" style="font-size: 0.65rem; opacity: 0.6; text-align: right; text-transform: none;">Sync is paused.</span>
+            </div>
+            <button class="add-btn" id="authBtnModal" onclick="toggleAuth()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); transition: 0.3s;">🔒 LOGIN WITH GOOGLE</button>
+        </div>
+
+        <div class="setting-row">
+            <span>THEME COLOR</span>
+            <div class="color-picker">
+                <div class="color-swatch" style="background: #a29bfe;" onclick="setThemeColor('#a29bfe', this)"></div>
+                <div class="color-swatch" style="background: #ff7675;" onclick="setThemeColor('#ff7675', this)"></div>
+                <div class="color-swatch" style="background: #55efc4;" onclick="setThemeColor('#55efc4', this)"></div>
+                <div class="color-swatch" style="background: #74b9ff;" onclick="setThemeColor('#74b9ff', this)"></div>
+                <input type="color" id="customColorPicker" style="width: 25px; height: 25px; padding: 0; border: none; cursor: pointer;" onchange="setThemeColor(this.value, this)">
+            </div>
+        </div>
+
+        <div class="setting-row">
+            <span>BACKGROUND DIMMING</span>
+            <input type="range" id="bgDimSlider" min="0" max="0.9" step="0.1" value="0.4" oninput="updateDimming()">
+        </div>
+
+        <div class="setting-row">
+            <span>WORK DURATION (MINS)</span>
+            <input type="number" id="workTimeInput" min="1" max="120" style="width: 70px; text-align: center; font-size: 0.9rem;">
+        </div>
+        
+        <div class="setting-row">
+            <span>BREAK DURATION (MINS)</span>
+            <input type="number" id="breakTimeInput" min="1" max="60" style="width: 70px; text-align: center; font-size: 0.9rem;">
+        </div>
+
+        <div class="setting-row">
+            <span>SOUND ALARM</span>
+            <div class="custom-checkbox" id="soundToggleCheck" onclick="toggleSettingsCheck('soundToggle')"></div>
+            <input type="checkbox" id="soundToggle" style="display:none;" onchange="if(this.checked) playAlarm()">
+        </div>
+
+        <div class="setting-row">
+            <span>NOTIFICATION SOUND</span>
+            <select id="soundTypeSelect" onchange="testSound()" style="padding: 6px; font-weight: bold; cursor: pointer;">
+                <option value="classic">CLASSIC BEEP</option>
+                <option value="chime">SOFT CHIME</option>
+                <option value="digital">DIGITAL PULSE</option>
+                <option value="chord">SUCCESS CHORD</option>
+            </select>
+        </div>
+
+        <div class="setting-row">
+            <span>DESKTOP NOTIFICATIONS</span>
+            <div class="custom-checkbox" id="notifToggleCheck" onclick="toggleSettingsCheck('notifToggle'); if(document.getElementById('notifToggle').checked) requestNotificationPermission();"></div>
+            <input type="checkbox" id="notifToggle" style="display:none;">
+        </div>
+
+        <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span>CUSTOM WORK END MSG</span>
+            <input type="text" id="workMsgInput" placeholder="TIME FOR A BREAK! ☕" style="width: 100%;">
+        </div>
+
+        <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
+            <span>CUSTOM BREAK END MSG</span>
+            <input type="text" id="breakMsgInput" placeholder="BACK TO WORK! 🚀" style="width: 100%;">
+        </div> 
+
+        <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 15px;">
+            <span style="color: var(--primary); text-shadow: 0 0 10px rgba(162, 155, 254, 0.3); font-weight: 900;">CUSTOM 100% COMPLETION MSG</span>
+            <textarea id="hundredMsgInput" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: white; font-weight: 800; font-family: inherit; resize: vertical; min-height: 60px;" placeholder="Type your aggressive motivation here..."></textarea>
+        </div>
+
+        <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 15px 0;"></div>
+        <h3 style="font-size: 0.8rem; color: var(--primary); margin-top: 0; margin-bottom: 12px; text-shadow: 0 0 10px rgba(162, 155, 254, 0.3);">CUSTOM ALARM / REMINDER</h3>
+        <div class="input-group" style="margin-bottom: 0;">
+            <input type="text" id="customRemMsg" placeholder="MSG (e.g. Drink Water)">
+            <input type="number" id="customRemTime" placeholder="MINS" style="width: 60px; text-align: center;">
+            <button class="add-btn" onclick="setCustomReminder()">START</button>
+        </div>
+
+        <button class="add-btn" onclick="saveSettings(); closeModal('settingsModal')" style="margin-top: 20px; width: 100%; padding: 12px;">SAVE & CLOSE SETTINGS</button>
+    </div>
+</div>
+
+<div id="pomodoroModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2>⏰ FOCUS TIMER</h2>
         <div class="timer-mode">
-            <button id="btnWork" class="mode-btn active" onclick="setTimerMode('work')">WORK (25m)</button>
-            <button id="btnBreak" class="mode-btn" onclick="setTimerMode('break')">BREAK (5m)</button>
+            <button class="mode-btn active" id="btnWork" onclick="setTimerMode('work')">WORK (25m)</button>
+            <button class="mode-btn" id="btnBreak" onclick="setTimerMode('break')">BREAK (5m)</button>
         </div>
-        <div id="timerDisplay" class="timer-display">25:00</div>
+        <div class="timer-display" id="timerDisplay">25:00</div>
         <div class="timer-controls">
-            <button id="btnTimerStart" class="action-btn accent" onclick="toggleTimer()">START</button>
-            <button class="action-btn" onclick="resetTimer()">RESET</button>
+            <button class="add-btn" id="btnTimerStart" onclick="toggleTimer()" style="padding: 10px 25px; font-size: 0.9rem;">START</button>
+            <button class="action-btn" onclick="resetTimer()" style="padding: 10px 25px; font-size: 0.9rem;">RESET</button>
         </div>
+        <button class="action-btn" onclick="closeModal('pomodoroModal')" style="width: 100%; margin-top: 10px;">CLOSE</button>
     </div>
+</div>
 
-    <div class="daily-wrapper">
-        <div id="navControlsRow" class="controls-row nav-controls">
-            <div class="date-selector-area draggable-nav" id="nav-day">
-                <button class="arrow" onclick="scrollTimeline(-400)">❮</button>
-                <input type="date" id="datePicker">
-                <button class="add-btn" onclick="createDay()">ADD DAY</button>
-                <button class="arrow" onclick="scrollTimeline(400)">❯</button>
-            </div>
-            <div class="date-selector-area draggable-nav" id="nav-month">
-                <input type="month" id="monthPicker">
-                <button class="add-btn" onclick="createMonth()">ADD MONTH</button>
-            </div>
-        </div>
-
-        <div id="daily-container"></div>
+<div id="statsModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 800px; width: 95%;">
+        <h2>📊 WEEKLY STATS</h2>
+        <div id="statsContent" style="display:flex; flex-direction:row; gap:30px; margin-bottom: 20px; flex-grow:1; justify-content:center; align-items:center; flex-wrap: wrap;"></div>
+        <button class="action-btn" onclick="closeModal('statsModal')" style="align-self:center; width:100%; margin-top: 15px;">CLOSE</button>
     </div>
+</div>
 
-    <div class="bottom-goals">
-        <div class="card" style="min-height: 250px;">
-            <div class="card-header"><h3>📌 MONTHLY GOALS</h3></div>
-            <div class="input-group">
-                <input type="text" id="in-month" placeholder="NEW GOAL..." onkeydown="if(event.key==='Enter') addGoal('month')">
-                <button class="add-btn" onclick="addGoal('month')">+</button>
-            </div>
-            <ul id="list-month"></ul>
+<div id="examModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2>🎯 EXAM TRACKER</h2>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="text" id="examName" placeholder="EXAM (e.g. FINALS)">
+            <input type="date" id="examDate">
+            <button class="add-btn" onclick="addExam()">ADD</button>
         </div>
-        <div class="card" style="min-height: 250px;">
-            <div class="card-header"><h3>🎯 YEARLY GOALS</h3></div>
-            <div class="input-group">
-                <input type="text" id="in-year" placeholder="NEW GOAL..." onkeydown="if(event.key==='Enter') addGoal('year')">
-                <button class="add-btn" onclick="addGoal('year')">+</button>
-            </div>
-            <ul id="list-year"></ul>
-        </div>
-        <div class="card" style="min-height: 250px;">
-            <div class="card-header"><h3>📂 ARCHIVES</h3></div>
-            <div id="report-list" style="flex-grow:1; overflow-y:auto; padding-right:5px;"></div>
-        </div>
+        <div id="examList" style="flex-grow: 1; overflow-y: auto; max-height: 300px; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;"></div>
+        <button class="action-btn" onclick="closeModal('examModal')" style="align-self:center; width:100%; margin-top: auto;">CLOSE</button>
     </div>
+</div>
 
-    <div id="settingsModal" class="modal-overlay" onclick="if(event.target===this) closeModal('settingsModal')">
-        <div class="modal-card">
-            <h2>⚙️ SETTINGS</h2>
-            <div style="overflow-y: auto; padding-right: 10px; flex-grow: 1; max-height: 60vh;">
-                <div style="text-align: center; font-size: 0.7rem; color: var(--done-green); margin-bottom: 20px;" id="syncStatus">Sync is paused.</div>
-                
-                <div class="setting-row">
-                    <label>THEME COLOR</label>
-                    <div class="color-picker">
-                        <div class="color-swatch active" style="background: #a29bfe;" onclick="setThemeColor('#a29bfe', this)"></div>
-                        <div class="color-swatch" style="background: #ff7675;" onclick="setThemeColor('#ff7675', this)"></div>
-                        <div class="color-swatch" style="background: #55efc4;" onclick="setThemeColor('#55efc4', this)"></div>
-                        <div class="color-swatch" style="background: #fdcb6e;" onclick="setThemeColor('#fdcb6e', this)"></div>
-                    </div>
-                </div>
-                <div class="setting-row">
-                    <label>BACKGROUND DIM</label>
-                    <input type="range" id="bgDimSlider" min="0" max="0.9" step="0.1" value="0.6" oninput="updateDimming()">
-                </div>
-                <div class="setting-row">
-                    <label>WORK DURATION (MINS)</label>
-                    <input type="number" id="workTimeInput" style="width: 60px; text-align: center;" value="25">
-                </div>
-                <div class="setting-row">
-                    <label>BREAK DURATION (MINS)</label>
-                    <input type="number" id="breakTimeInput" style="width: 60px; text-align: center;" value="5">
-                </div>
-                <div class="setting-row">
-                    <label>SOUND ALARM</label>
-                    <div class="custom-checkbox checked" id="soundToggleCheck" onclick="toggleSettingsCheck('soundToggle')"></div>
-                    <input type="checkbox" id="soundToggle" checked style="display: none;">
-                </div>
-                <div class="setting-row">
-                    <label>ALARM TYPE</label>
-                    <select id="soundTypeSelect" onchange="testSound()">
-                        <option value="classic">CLASSIC BEEP</option>
-                        <option value="chime">SOFT CHIME</option>
-                        <option value="digital">DIGITAL WATCH</option>
-                        <option value="chord">SUCCESS CHORD</option>
-                    </select>
-                </div>
-                <div class="setting-row">
-                    <label>DESKTOP NOTIFICATIONS</label>
-                    <div class="custom-checkbox" id="notifToggleCheck" onclick="toggleSettingsCheck('notifToggle'); requestNotificationPermission();"></div>
-                    <input type="checkbox" id="notifToggle" style="display: none;">
-                </div>
-                
-                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 15px;">
-                    <label style="font-weight: 900;">CUSTOM WORK END MSG</label>
-                    <input type="text" id="workMsgInput" style="width: 100%;" value="TIME FOR A BREAK! ☕">
-                </div>
-                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
-                    <label style="font-weight: 900;">CUSTOM BREAK END MSG</label>
-                    <input type="text" id="breakMsgInput" style="width: 100%;" value="BACK TO WORK! 🚀">
-                </div>
-
-                <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 15px;">
-                    <label style="font-weight: 900; letter-spacing: 1px; color: var(--primary);">CUSTOM 100% COMPLETION MSG</label>
-                    <textarea id="hundredMsgInput" style="width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); background: rgba(0,0,0,0.4); color: white; font-weight: 800; font-family: inherit; resize: vertical; min-height: 60px;" placeholder="Type your aggressive motivation here..."></textarea>
-                </div>
-
-                <div style="border-top: 1px solid rgba(255,255,255,0.1); margin: 20px 0; padding-top: 20px;">
-                    <label style="font-weight: 900; font-size: 0.75rem; color: var(--primary); display: block; margin-bottom: 10px;">CUSTOM ALARM / REMINDER</label>
-                    <div style="display: flex; gap: 10px;">
-                        <input type="text" id="customRemMsg" placeholder="MSG (E.G. DRINK WATER)" style="flex-grow: 1;">
-                        <input type="number" id="customRemTime" placeholder="MIN" style="width: 60px; text-align: center;">
-                        <button class="action-btn accent" onclick="setCustomReminder()">START</button>
-                    </div>
-                </div>
-            </div>
-            <button class="action-btn accent" style="width: 100%; padding: 12px; margin-top: 15px;" onclick="saveSettings(); closeModal('settingsModal')">SAVE & CLOSE SETTINGS</button>
-        </div>
+<div id="reportModal" class="modal-overlay">
+    <div class="modal-card" style="max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto;">
+        <h2 id="reportModalTitle">📊 MONTHLY REPORT</h2>
+        <div id="reportModalContent" style="display:flex; flex-direction:column; gap:20px; padding-right: 10px;"></div>
+        <button class="action-btn" onclick="closeModal('reportModal')" style="width:100%; margin-top: 15px;">CLOSE REPORT</button>
     </div>
+</div>
 
-    <div id="reportModal" class="modal-overlay" onclick="if(event.target===this) closeModal('reportModal')">
-        <div class="modal-card">
-            <h2 id="reportModalTitle">📊 REPORT</h2>
-            <div id="reportModalContent"></div>
-            <button class="action-btn accent" style="width: 100%; padding: 12px;" onclick="closeModal('reportModal')">CLOSE REPORT</button>
-        </div>
-    </div>
+<script src="app.js"></script>
 
-    <div id="statsModal" class="modal-overlay" onclick="if(event.target===this) closeModal('statsModal')">
-        <div class="modal-card">
-            <h2>📈 WEEKLY STATS</h2>
-            <div id="statsContent" style="display:flex; flex-wrap:wrap; gap:20px; align-items:center;"></div>
-            <button class="action-btn accent" style="width: 100%; padding: 12px; margin-top:20px;" onclick="closeModal('statsModal')">CLOSE</button>
-        </div>
-    </div>
-
-    <div id="examModal" class="modal-overlay" onclick="if(event.target===this) closeModal('examModal')">
-        <div class="modal-card">
-            <h2>🎯 EXAM TRACKER</h2>
-            <div class="input-group" style="margin-bottom: 20px;">
-                <input type="text" id="examName" placeholder="EXAM NAME...">
-                <input type="date" id="examDate">
-                <button class="add-btn" onclick="addExam()">+</button>
-            </div>
-            <div id="examList" style="flex-grow: 1; max-height: 40vh; overflow-y: auto;"></div>
-            <button class="action-btn accent" style="width: 100%; padding: 12px; margin-top: 20px;" onclick="closeModal('examModal')">CLOSE</button>
-        </div>
-    </div>
-
-    <script src="app.js"></script>
 </body>
 </html>
