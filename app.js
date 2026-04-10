@@ -487,7 +487,7 @@ function updateTimerDisplay() {
     const s = (timeLeft % 60).toString().padStart(2, '0');
     const timeString = `${m}:${s}`;
     document.getElementById('timerDisplay').innerText = timeString;
-    if(isRunning) { document.title = `(${timeString}) Planner`; } else { document.title = `Planner`; }
+    if(isRunning) { document.title = `(${timeString}) PLANNER`; } else { document.title = `PLANNER`; }
 }
 
 function setTimerMode(mode) {
