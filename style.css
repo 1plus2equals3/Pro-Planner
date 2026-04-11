@@ -179,39 +179,60 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
 .celeb-card h2 { color: var(--done-green) !important; text-shadow: 0 0 20px rgba(0, 255, 136, 0.5) !important; border-bottom: 1px solid rgba(0,255,136,0.2) !important; width: 100%; text-align: center; }
 
 /* =========================================
-   📱 MOBILE OPTIMIZATION (THE REAL FIX)
+   📱 ULTRA-PREMIUM MOBILE OPTIMIZATION
    ========================================= */
 @media screen and (max-width: 768px) {
-    /* Fix Overall Page Horizontal Scroll */
-    body { width: 100%; overflow-x: hidden; }
+    /* 1. Native App Vibe: Remove annoying blue tap highlights */
+    body { width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
 
-    /* Fix Header Stacking */
-    header { flex-direction: column; padding: 15px 10px; gap: 15px; text-align: center; }
-    header h1 { font-size: 1.5rem; text-align: center; width: 100%; }
+    /* 2. Premium Card Carousel (Swipe 1 card at a time smoothly) */
+    #daily-container { 
+        scroll-snap-type: x mandatory; /* Native swipe feel */
+        -webkit-overflow-scrolling: touch; 
+        padding: 15px 5vw 40px 5vw; 
+        gap: 15px; 
+        scroll-behavior: smooth;
+    }
+    .card { 
+        scroll-snap-align: center; /* Locks card in center when swiped */
+        min-width: 88vw !important; 
+        max-width: 88vw !important; 
+        padding: 25px; 
+        border-radius: 25px; /* Softer, premium edges */
+    }
 
-    /* Fix Control Buttons */
-    .controls-row { justify-content: center; gap: 8px; width: 100%; }
-    .action-btn, .streak-badge { font-size: 0.65rem; padding: 8px 12px; }
+    /* 3. Header & Spacing Breathing Room */
+    header { flex-direction: column; padding: 20px 15px; gap: 18px; text-align: center; }
+    header h1 { font-size: 1.6rem; letter-spacing: 5px; }
 
-    .quote-banner { font-size: 0.65rem; padding: 10px; }
+    /* 4. Thicc Touch Targets (Apple/Android Standard for Thumbs) */
+    .controls-row { justify-content: center; gap: 10px; width: 100%; }
+    .action-btn, .mode-btn { 
+        padding: 12px 18px !important; 
+        font-size: 0.75rem !important; 
+        border-radius: 12px !important; 
+    }
+    .add-btn { padding: 12px 20px !important; border-radius: 10px !important; font-size: 0.8rem !important;}
 
-    /* Fix Date & Month Pickers */
-    .date-selector-area { flex-direction: column; padding: 15px; width: 90%; margin: 0 auto 20px auto; }
-    .date-selector-area span { display: none; } /* Hide the | separator on mobile */
+    .quote-banner { font-size: 0.7rem; padding: 12px; letter-spacing: 2px;}
 
-    .nav-controls { justify-content: space-between; padding: 0 15px; }
+    /* 5. Modals & Inputs */
+    .date-selector-area { flex-direction: column; padding: 20px; width: 90%; margin: 0 auto 20px auto; border-radius: 15px;}
+    .date-selector-area span { display: none; } 
+    .date-selector-area input { width: 100%; padding: 12px !important; font-size: 0.85rem !important;}
 
-    /* Fix Daily Timeline Cards (Make them fit the screen) */
-    #daily-container { padding: 10px 5vw 40px 5vw; gap: 15px; }
-    .card { min-width: 85vw !important; max-width: 85vw !important; padding: 20px; }
+    .nav-controls { justify-content: space-between; padding: 0 15px; margin-bottom: 25px;}
+    .nav-controls .arrow { padding: 12px 25px; font-size: 1.2rem; border-radius: 20px;}
 
-    /* Fix Bottom Goals (Stop them from pushing the screen width) */
-    .bottom-goals { flex-direction: column; padding: 15px; gap: 20px; }
+    .bottom-goals { flex-direction: column; padding: 15px; gap: 25px; }
     .bottom-goals .card { min-width: 100% !important; max-width: 100% !important; }
 
-    /* Fix Modals */
-    .modal-card { width: 95% !important; padding: 20px; max-height: 85vh; }
-    .modal-card h2 { font-size: 1.2rem; }
+    .modal-card { width: 92% !important; padding: 25px; max-height: 85vh; border-radius: 25px;}
+    .modal-card h2 { font-size: 1.3rem; margin-bottom: 25px;}
 
-    .timer-display { font-size: 3.5rem; }
+    .timer-display { font-size: 4.5rem; letter-spacing: 6px; margin: 30px 0; }
+    
+    /* 6. Better Checkbox and List sizing for thumbs */
+    li { padding: 14px 16px; margin-bottom: 10px; border-radius: 12px;}
+    .custom-checkbox { width: 22px; height: 22px; }
 }
