@@ -187,3 +187,101 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
 .custom-celeb-overlay { background: rgba(0,0,0,0.6) !important; backdrop-filter: blur(4px) !important; z-index: 9997 !important; }
 .celeb-card { border-color: var(--done-green) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 40px rgba(0, 255, 136, 0.2) !important; align-items: center; }
 .celeb-card h2 { color: var(--done-green) !important; text-shadow: 0 0 20px rgba(0, 255, 136, 0.5) !important; border-bottom: 1px solid rgba(0,255,136,0.2) !important; width: 100%; text-align: center; }
+
+/* =========================================
+   📱 MOBILE OPTIMIZATION (RESPONSIVE FIX)
+   ========================================= */
+
+@media screen and (max-width: 768px) {
+    /* 1. Header ko stack hone se rokna aur font chhota karna */
+    header {
+        padding: 10px 12px;
+        flex-direction: column;
+        gap: 12px;
+    }
+
+    header h1 {
+        font-size: 1.2rem;
+        letter-spacing: 2px;
+    }
+
+    .controls-row {
+        justify-content: center;
+        width: 100%;
+        gap: 6px;
+    }
+
+    .action-btn {
+        padding: 6px 10px;
+        font-size: 0.6rem;
+    }
+
+    /* 2. Quote banner ko readable banana */
+    .quote-banner {
+        font-size: 0.6rem;
+        padding: 10px;
+    }
+
+    /* 3. Cards ko mobile screen pe fit karna */
+    .card {
+        min-width: 90vw !important; /* Screen width ke hisaab se */
+        max-width: 95vw !important;
+        margin: 0 auto;
+        padding: 15px;
+    }
+
+    #daily-container {
+        padding: 10px;
+        gap: 20px;
+    }
+
+    /* 4. Controls (Date/Month Picker) ko responsive banana */
+    .date-selector-area {
+        flex-direction: column;
+        width: 100%;
+        padding: 15px;
+        gap: 10px;
+    }
+
+    .nav-controls {
+        width: 100%;
+        justify-content: space-between;
+        padding: 0 10px;
+    }
+
+    /* 5. Modals (Settings/Stats) ko screen pe center aur readable banana */
+    .modal-card {
+        width: 95% !important;
+        padding: 20px;
+        max-height: 90vh;
+    }
+
+    .modal-card h2 {
+        font-size: 1.2rem;
+    }
+
+    .setting-row {
+        font-size: 0.7rem;
+    }
+
+    /* 6. Timer display size on phone */
+    .timer-display {
+        font-size: 3rem;
+    }
+
+    /* 7. Bottom Goals layouts */
+    .bottom-goals {
+        padding: 20px 10px;
+        gap: 20px;
+    }
+    
+    /* Input groups fix for small screens */
+    .input-group {
+        grid-template-columns: 1fr auto;
+    }
+    
+    .input-group select {
+        grid-column: span 2;
+        margin-top: 5px;
+    }
+}
