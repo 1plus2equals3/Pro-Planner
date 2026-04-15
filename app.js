@@ -522,7 +522,7 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
-/* --- BEAST MODE v2: 70% THRESHOLD & -2 PENALTY --- */
+/* --- STRICT MODE: 70% THRESHOLD OR ZERO MERCY --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
@@ -537,14 +537,15 @@ function calculateStreak() {
         let totalTasks = tasks.length;
         let doneCount = tasks.filter(t => t.done).length;
         let completionPercentage = (doneCount / totalTasks) * 100;
-        let isSuccess = completionPercentage >= 70;
+        
+        // Success matlab din ka 70% kaam hona chahiye
+        let isSuccess = completionPercentage >= 70; 
 
         if (dateStr < todayStr) {
             if (isSuccess) {
                 streak += 1; 
             } else {
-                streak -= 2; 
-                if (streak < 0) streak = 0; 
+                streak = 0; // 🔥 ZERO MERCY. EK DIN MISS, STREAK KHATAM.
             }
         } else if (dateStr === todayStr) {
             if (isSuccess) {
