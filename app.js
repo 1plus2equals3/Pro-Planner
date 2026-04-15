@@ -522,7 +522,7 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
-/* --- STRICT MODE: 70% THRESHOLD OR ZERO MERCY --- */
+/* --- 💀 NO EXCUSES MODE: 70% THRESHOLD + EMPTY DAY PENALTY --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
@@ -530,31 +530,42 @@ function calculateStreak() {
     const sortedDates = Object.keys(dailyData).sort();
 
     sortedDates.forEach(dateStr => {
-        let tasks = dailyData[dateStr];
-        
-        if (!tasks || tasks.length === 0) return; 
-
+        // Agar task nahi hai toh empty array maan lo
+        let tasks = dailyData[dateStr] || []; 
         let totalTasks = tasks.length;
-        let doneCount = tasks.filter(t => t.done).length;
-        let completionPercentage = (doneCount / totalTasks) * 100;
         
-        // Success matlab din ka 70% kaam hona chahiye
-        let isSuccess = completionPercentage >= 70; 
-
         if (dateStr < todayStr) {
-            if (isSuccess) {
-                streak += 1; 
+            // PAST DAYS (Beete hue din)
+            if (totalTasks > 0) {
+                let doneCount = tasks.filter(t => t.done).length;
+                let completionPercentage = (doneCount / totalTasks) * 100;
+                
+                if (completionPercentage >= 70) {
+                    streak += 1; // 70% done, streak badhti jayegi
+                } else {
+                    streak = 0; // Failed the 70% rule
+                }
             } else {
-                streak = 0; // 🔥 ZERO MERCY. EK DIN MISS, STREAK KHATAM.
+                // 🔥 LOOPHOLE KILLED: Din add kiya par task 0? Matab AALAS = STREAK ZERO!
+                streak = 0; 
             }
         } else if (dateStr === todayStr) {
-            if (isSuccess) {
-                streak += 1;
+            // TODAY (Aaj ka din)
+            // Aaj ke din penalty tabhi milegi jab aaj ka din khatam hoga (kal)
+            // Lekin agar aaj ka 70% kaam ho gaya, toh streak +1 ho jayegi
+            if (totalTasks > 0) {
+                let doneCount = tasks.filter(t => t.done).length;
+                let completionPercentage = (doneCount / totalTasks) * 100;
+                
+                if (completionPercentage >= 70) {
+                    streak += 1;
+                }
             }
         }
     });
 
-    document.getElementById('streakCount').innerText = streak;
+    const streakElement = document.getElementById('streakCount');
+    if(streakElement) streakElement.innerText = streak;
 }
 
 function checkRollover() {
