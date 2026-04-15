@@ -1030,39 +1030,94 @@ function addExam() {
     const name = document.getElementById('examName').value.toUpperCase().trim();
     const date = document.getElementById('examDate').value;
     if(!name || !date) return;
-    trackedExams.push({ id: Date.now(), name, date }); localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); syncToFirebase();
-    document.getElementById('examName').value = ''; document.getElementById('examDate').value = ''; renderExams();
+    trackedExams.push({ id: Date.now(), name, date }); 
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    syncToFirebase();
+    document.getElementById('examName').value = ''; 
+    document.getElementById('examDate').value = ''; 
+    renderExams();
 }
 
 function removeExam(id) {
-    trackedExams = trackedExams.filter(e => e.id !== id); localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); syncToFirebase(); renderExams();
+    trackedExams = trackedExams.filter(e => e.id !== id); 
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    syncToFirebase(); 
+    renderExams();
 }
 
 function renderExams() {
     const container = document.getElementById('examList');
-    if(trackedExams.length === 0) { container.innerHTML = `<p style="text-align:center; opacity:0.5;">NO EXAMS TRACKED</p>`; return; }
+    if(trackedExams.length === 0) { 
+        container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO EXAMS TRACKED</p>`; 
+        return; 
+    }
     
     const today = new Date(); 
     today.setHours(0,0,0,0);
     
-    const sortedExams = [...trackedExams].sort((a,b) => new Date(a.date) - new Date(b.date));
-    
-    container.innerHTML = sortedExams.map(exam => {
+    let pending = [];
+    let aced = [];
+
+    // Automation logic
+    trackedExams.forEach(exam => {
         const [year, month, day] = exam.date.split('-');
         const examDate = new Date(year, month - 1, day);
         const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
         
-        let dTxt = "", bCol = "var(--primary)";
-        if (diffDays > 0) dTxt = `${diffDays} DAYS LEFT`; 
-        else if (diffDays === 0) { dTxt = `TODAY! 🔥`; bCol = "var(--done-green)"; } 
-        else { dTxt = `${Math.abs(diffDays)} DAYS AGO`; bCol = "var(--missed)"; }
+        exam.diffDays = diffDays;
+        exam.examDateStr = examDate.toDateString().toUpperCase();
 
-        return `
-        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-            <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${examDate.toDateString().toUpperCase()}</div></div>
-            <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
-        </div>`;
-    }).join('');
+        if (diffDays < 0) {
+            aced.push(exam);
+        } else {
+            pending.push(exam);
+        }
+    });
+
+    pending.sort((a, b) => a.diffDays - b.diffDays);
+    aced.sort((a, b) => b.diffDays - a.diffDays);
+
+    let html = "";
+
+    // 🏆 TROPHY ACCORDION (Click to Open)
+    if (aced.length > 0) {
+        html += `
+        <details style="margin-bottom: 20px; outline: none;">
+            <summary style="list-style: none; text-align: center; cursor: pointer; font-size: 1.5rem; filter: drop-shadow(0 0 10px rgba(0,255,136,0.4)); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
+                🏆
+            </summary>
+            <div style="margin-top: 15px; animation: fadeIn 0.3s ease;">
+                ${aced.map(exam => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
+                    <div>
+                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
+                        <div style="font-size: 0.6rem; opacity: 0.6;">${exam.examDateStr}</div>
+                    </div>
+                    <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
+                </div>`).join('')}
+            </div>
+            <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); margin: 15px 0;"></div>
+        </details>`;
+    }
+
+    // 🎯 PENDING EXAMS
+    if (pending.length > 0) {
+        html += pending.map(exam => {
+            let dTxt = "", bCol = "var(--primary)";
+            if (exam.diffDays > 0) dTxt = `${exam.diffDays} DAYS LEFT`;
+            else if (exam.diffDays === 0) { dTxt = `TODAY! 🔥`; bCol = "var(--done-green)"; }
+
+            return `
+            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
+                <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
+                <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
+            </div>`;
+        }).join('');
+    } else if (aced.length === 0) {
+        html += `<p style="text-align:center; opacity:0.5;">NO PENDING EXAMS</p>`;
+    }
+
+    container.innerHTML = html;
 }
 
 function exportBackup() {
