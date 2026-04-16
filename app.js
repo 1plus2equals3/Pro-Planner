@@ -530,29 +530,23 @@ function calculateStreak() {
     const sortedDates = Object.keys(dailyData).sort();
 
     sortedDates.forEach(dateStr => {
-        // Agar task nahi hai toh empty array maan lo
         let tasks = dailyData[dateStr] || []; 
         let totalTasks = tasks.length;
         
         if (dateStr < todayStr) {
-            // PAST DAYS (Beete hue din)
             if (totalTasks > 0) {
                 let doneCount = tasks.filter(t => t.done).length;
                 let completionPercentage = (doneCount / totalTasks) * 100;
                 
                 if (completionPercentage >= 70) {
-                    streak += 1; // 70% done, streak badhti jayegi
+                    streak += 1; 
                 } else {
-                    streak = 0; // Failed the 70% rule
+                    streak = 0; 
                 }
             } else {
-                // 🔥 LOOPHOLE KILLED: Din add kiya par task 0? Matab AALAS = STREAK ZERO!
                 streak = 0; 
             }
         } else if (dateStr === todayStr) {
-            // TODAY (Aaj ka din)
-            // Aaj ke din penalty tabhi milegi jab aaj ka din khatam hoga (kal)
-            // Lekin agar aaj ka 70% kaam ho gaya, toh streak +1 ho jayegi
             if (totalTasks > 0) {
                 let doneCount = tasks.filter(t => t.done).length;
                 let completionPercentage = (doneCount / totalTasks) * 100;
@@ -1026,108 +1020,14 @@ function renderStats() {
     `;
 }
 
-function addExam() {
-    const name = document.getElementById('examName').value.toUpperCase().trim();
-    const date = document.getElementById('examDate').value;
-    if(!name || !date) return;
-    trackedExams.push({ id: Date.now(), name, date }); 
-    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
-    syncToFirebase();
-    document.getElementById('examName').value = ''; 
-    document.getElementById('examDate').value = ''; 
-    renderExams();
-}
-
-function removeExam(id) {
-    trackedExams = trackedExams.filter(e => e.id !== id); 
-    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
-    syncToFirebase(); 
-    renderExams();
-}
-
-function renderExams() {
-    const container = document.getElementById('examList');
-    if(trackedExams.length === 0) { 
-        container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO EXAMS TRACKED</p>`; 
-        return; 
-    }
-    
-    const today = new Date(); 
-    today.setHours(0,0,0,0);
-    
-    let pending = [];
-    let aced = [];
-
-    // Automation logic
-    trackedExams.forEach(exam => {
-        const [year, month, day] = exam.date.split('-');
-        const examDate = new Date(year, month - 1, day);
-        const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
-        
-        exam.diffDays = diffDays;
-        exam.examDateStr = examDate.toDateString().toUpperCase();
-
-        if (diffDays < 0) {
-            aced.push(exam);
-        } else {
-            pending.push(exam);
-        }
-    });
-
-    pending.sort((a, b) => a.diffDays - b.diffDays);
-    aced.sort((a, b) => b.diffDays - a.diffDays);
-
-    let html = "";
-
-    // 🏆 TROPHY ACCORDION (Click to Open)
-    if (aced.length > 0) {
-        html += `
-        <details style="margin-bottom: 20px; outline: none;">
-            <summary style="list-style: none; text-align: center; cursor: pointer; font-size: 1.5rem; filter: drop-shadow(0 0 10px rgba(0,255,136,0.4)); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
-                🏆
-            </summary>
-            <div style="margin-top: 15px; animation: fadeIn 0.3s ease;">
-                ${aced.map(exam => `
-                <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
-                    <div>
-                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
-                        <div style="font-size: 0.6rem; opacity: 0.6;">${exam.examDateStr}</div>
-                    </div>
-                    <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
-                </div>`).join('')}
-            </div>
-            <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); margin: 15px 0;"></div>
-        </details>`;
-    }
-
-    // 🎯 PENDING EXAMS
-    if (pending.length > 0) {
-        html += pending.map(exam => {
-            let dTxt = "", bCol = "var(--primary)";
-            if (exam.diffDays > 0) dTxt = `${exam.diffDays} DAYS LEFT`;
-            else if (exam.diffDays === 0) { dTxt = `TODAY! 🔥`; bCol = "var(--done-green)"; }
-
-            return `
-            <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-                <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
-                <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
-            </div>`;
-        }).join('');
-    } else if (aced.length === 0) {
-        html += `<p style="text-align:center; opacity:0.5;">NO PENDING EXAMS</p>`;
-    }
-
-    container.innerHTML = html;
-}
-
-function exportBackup() {
+export function exportBackup() {
     const backupData = { vibeProFinal: localStorage.getItem('vibeProFinal'), vibeReports: localStorage.getItem('vibeReports'), vibeExams: localStorage.getItem('vibeExams'), month: localStorage.getItem('month'), year: localStorage.getItem('year'), vibeSettings: localStorage.getItem('vibeSettings'), vibeNavOrder: localStorage.getItem('vibeNavOrder') };
     const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `VIBE_PLANNER_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
-function importBackup(event) {
+export function importBackup(event) {
     const file = event.target.files[0]; if (!file) return; const reader = new FileReader();
     reader.onload = function(e) {
         try {
@@ -1158,7 +1058,7 @@ if ('serviceWorker' in navigator) {
 /* --- NEBULA SYNC: SUBTASK LOGIC --- */
 function toggleSubtaskList(date, idx) {
     let task = dailyData[date][idx];
-    task.stCollapsed = !task.stCollapsed; // State save ho jayegi!
+    task.stCollapsed = !task.stCollapsed; 
     save();
     const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
     dailyData[date].forEach((t, i) => renderTask(date, t, i));
@@ -1176,8 +1076,8 @@ function addSubtask(date, idx) {
     
     if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
     dailyData[date][idx].subtasks.push({ text: text, done: false });
-    dailyData[date][idx].done = false; // Naya task add hone par main task incomplete ho jayega
-    dailyData[date][idx].stCollapsed = false; // Naya subtask add karte waqt list open ho jayegi
+    dailyData[date][idx].done = false; 
+    dailyData[date][idx].stCollapsed = false; 
     
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();
@@ -1223,4 +1123,113 @@ function removeSubtask(date, tIdx, sIdx) {
     }
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();
+}
+
+// --- 🏆 TROPHY TOGGLE LOGIC ---
+let isAcedOpen = false;
+function toggleAcedExams() {
+    isAcedOpen = !isAcedOpen;
+    const cont = document.getElementById('acedExamsContainer');
+    if (cont) {
+        cont.style.display = isAcedOpen ? 'flex' : 'none';
+    }
+    const trophyBtn = document.getElementById('trophyBtn');
+    if (trophyBtn) {
+        trophyBtn.style.opacity = isAcedOpen ? '1' : '0.6';
+    }
+}
+
+function addExam() {
+    const name = document.getElementById('examName').value.toUpperCase().trim();
+    const date = document.getElementById('examDate').value;
+    if(!name || !date) return;
+    trackedExams.push({ id: Date.now(), name, date }); 
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    syncToFirebase();
+    document.getElementById('examName').value = ''; 
+    document.getElementById('examDate').value = ''; 
+    renderExams();
+}
+
+function removeExam(id) {
+    trackedExams = trackedExams.filter(e => e.id !== id); 
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    syncToFirebase(); 
+    renderExams();
+}
+
+function renderExams() {
+    const listContainer = document.getElementById('examList');
+    const acedContainer = document.getElementById('acedExamsContainer');
+    const trophyBtn = document.getElementById('trophyBtn');
+
+    if(trackedExams.length === 0) { 
+        if (listContainer) listContainer.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO EXAMS TRACKED</p>`; 
+        if (acedContainer) acedContainer.innerHTML = '';
+        if (trophyBtn) trophyBtn.style.display = 'none';
+        return; 
+    }
+    
+    const today = new Date(); 
+    today.setHours(0,0,0,0);
+    
+    let pending = [];
+    let aced = [];
+
+    // Automation logic
+    trackedExams.forEach(exam => {
+        const [year, month, day] = exam.date.split('-');
+        const examDate = new Date(year, month - 1, day);
+        const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
+        
+        exam.diffDays = diffDays;
+        exam.examDateStr = examDate.toDateString().toUpperCase();
+
+        if (diffDays < 0) {
+            aced.push(exam);
+        } else {
+            pending.push(exam);
+        }
+    });
+
+    pending.sort((a, b) => a.diffDays - b.diffDays);
+    aced.sort((a, b) => b.diffDays - a.diffDays);
+
+    // Render Aced Exams (Inside Trophy Dropdown)
+    if (aced.length > 0) {
+        if (trophyBtn) trophyBtn.style.display = 'block';
+        if (acedContainer) {
+            acedContainer.innerHTML = aced.map(exam => `
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
+                <div>
+                    <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
+                    <div style="font-size: 0.6rem; opacity: 0.6;">${exam.examDateStr}</div>
+                </div>
+                <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
+            </div>`).join('');
+        }
+    } else {
+        if (trophyBtn) trophyBtn.style.display = 'none';
+        if (acedContainer) acedContainer.style.display = 'none';
+        isAcedOpen = false;
+    }
+
+    // Render Pending Exams
+    if (pending.length > 0) {
+        if (listContainer) {
+            listContainer.innerHTML = pending.map(exam => {
+                let dTxt = "", bCol = "var(--primary)";
+                if (exam.diffDays > 0) dTxt = `${exam.diffDays} DAYS LEFT`;
+                else if (exam.diffDays === 0) { dTxt = `TODAY! 🔥`; bCol = "var(--done-green)"; }
+
+                return `
+                <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
+                    <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
+                    <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
+                </div>`;
+            }).join('');
+        }
+    } else {
+        if (listContainer) listContainer.innerHTML = `<p style="text-align:center; opacity:0.4; font-size: 0.75rem;">NO PENDING EXAMS</p>`;
+    }
 }
