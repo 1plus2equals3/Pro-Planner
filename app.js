@@ -280,12 +280,6 @@ function playAlarm(overrideType = null) {
                 osc1.type = 'sine'; osc1.frequency.setValueAtTime(880, ctx.currentTime + offset);
                 gain1.gain.setValueAtTime(1, ctx.currentTime + offset); gain1.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + offset + 0.5);
                 osc1.start(ctx.currentTime + offset); osc1.stop(ctx.currentTime + offset + 0.5);
-
-                const osc2 = ctx.createOscillator(); const gain2 = ctx.createGain();
-                osc2.connect(gain2); gain2.connect(ctx.destination);
-                osc2.type = 'sine'; osc2.frequency.setValueAtTime(880, ctx.currentTime + offset + 0.6);
-                gain2.gain.setValueAtTime(1, ctx.currentTime + offset + 0.6); gain2.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + offset + 1.1);
-                osc2.start(ctx.currentTime + offset + 0.6); osc2.stop(ctx.currentTime + offset + 1.1);
             }
         } else if (type === 'chime') {
             for(let i = 0; i < 3; i++) {
@@ -295,31 +289,6 @@ function playAlarm(overrideType = null) {
                 osc.type = 'sine'; osc.frequency.setValueAtTime(1046.50, ctx.currentTime + offset);
                 gain.gain.setValueAtTime(1, ctx.currentTime + offset); gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + offset + 1.5);
                 osc.start(ctx.currentTime + offset); osc.stop(ctx.currentTime + offset + 1.5);
-            }
-        } else if (type === 'digital') {
-            for(let burst = 0; burst < 3; burst++) {
-                let offset = burst * 0.8;
-                for(let i=0; i<3; i++) {
-                    const time = ctx.currentTime + offset + (i * 0.15);
-                    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-                    osc.connect(gain); gain.connect(ctx.destination);
-                    osc.type = 'square'; osc.frequency.setValueAtTime(800, time);
-                    gain.gain.setValueAtTime(0.15, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.1);
-                    osc.start(time); osc.stop(time + 0.1);
-                }
-            }
-        } else if (type === 'chord') {
-            const notes = [523.25, 659.25, 783.99, 1046.50];
-            for(let repeat = 0; repeat < 3; repeat++) {
-                let offset = repeat * 1.0;
-                notes.forEach((freq, i) => {
-                    const time = ctx.currentTime + offset + (i * 0.12);
-                    const osc = ctx.createOscillator(); const gain = ctx.createGain();
-                    osc.connect(gain); gain.connect(ctx.destination);
-                    osc.type = 'triangle'; osc.frequency.setValueAtTime(freq, time);
-                    gain.gain.setValueAtTime(0.3, time); gain.gain.exponentialRampToValueAtTime(0.01, time + 0.6);
-                    osc.start(time); osc.stop(time + 0.6);
-                });
             }
         }
     } catch(e) { console.log("Audio not supported"); }
@@ -411,7 +380,6 @@ function updateDimming() {
 
 function saveSettings() {
     settings.dim = document.getElementById('bgDimSlider').value;
-    
     let newWorkTime = parseInt(document.getElementById('workTimeInput').value);
     let newBreakTime = parseInt(document.getElementById('breakTimeInput').value);
     settings.workTime = newWorkTime > 0 ? newWorkTime : 25;
@@ -444,23 +412,11 @@ function initBackground() {
     let gradients = [];
 
     if (hour >= 6 && hour < 12) {
-        gradients = [
-            'linear-gradient(135deg, #1a0b2e, #4b1d52)', 
-            'linear-gradient(135deg, #2b0f4c, #60214f)',
-            'linear-gradient(135deg, #1f0b38, #59233f)'
-        ];
+        gradients = ['linear-gradient(135deg, #1a0b2e, #4b1d52)', 'linear-gradient(135deg, #2b0f4c, #60214f)', 'linear-gradient(135deg, #1f0b38, #59233f)'];
     } else if (hour >= 12 && hour < 18) {
-        gradients = [
-            'linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 
-            'linear-gradient(135deg, #141e30, #243b55)',
-            'linear-gradient(135deg, #0d1b2a, #1b263b)'
-        ];
+        gradients = ['linear-gradient(135deg, #0f2027, #203a43, #2c5364)', 'linear-gradient(135deg, #141e30, #243b55)', 'linear-gradient(135deg, #0d1b2a, #1b263b)'];
     } else {
-        gradients = [
-            'linear-gradient(135deg, #050505, #12001c, #0a001a)', 
-            'linear-gradient(135deg, #000000, #0f0c29, #302b63)',
-            'linear-gradient(135deg, #050505, #1a001a)'
-        ];
+        gradients = ['linear-gradient(135deg, #050505, #12001c, #0a001a)', 'linear-gradient(135deg, #000000, #0f0c29, #302b63)', 'linear-gradient(135deg, #050505, #1a001a)'];
     }
 
     gradients.forEach((grad, i) => {
@@ -522,7 +478,6 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
-/* --- 🔥 UPGRADED: PROPORTIONAL MICRO-PROGRESS & STREAK TRACKING --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
@@ -539,13 +494,11 @@ function calculateStreak() {
                 let weightPerTask = 100 / totalTasks;
 
                 tasks.forEach(task => {
-                    // Agar subtasks hain, toh unka percentage nikalo
                     if (task.subtasks && task.subtasks.length > 0) {
                         let doneSubtasks = task.subtasks.filter(st => st.done).length;
                         let subtaskRatio = doneSubtasks / task.subtasks.length;
                         dailyPercent += (subtaskRatio * weightPerTask);
                     } else {
-                        // Main task normal tick
                         if (task.done) dailyPercent += weightPerTask;
                     }
                 });
@@ -573,7 +526,6 @@ function calculateStreak() {
     if(streakElement) streakElement.innerText = streak;
 }
 
-/* --- 🔥 UPGRADED: PROPORTIONAL PROGRESS BAR UPDATE --- */
 function updateProgress(date) {
     const tasks = dailyData[date] || [];
     
@@ -603,22 +555,74 @@ function updateProgress(date) {
     if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = finalPercent + "%";
 }
 
-
+/* --- 🔥 UPGRADED: SMART 60% ROLLOVER LOGIC --- */
 function checkRollover() {
-    const today = new Date().toISOString().split('T')[0]; let changed = false;
+    const todayStr = new Date().toISOString().split('T')[0]; 
+    let changed = false;
+    
     Object.keys(dailyData).forEach(date => {
-        if (date < today) {
+        if (date < todayStr) {
             dailyData[date].forEach(task => {
                 if (!task.done && !task.rolledOver) {
-                    task.rolledOver = true;
-                    if (!dailyData[today]) { dailyData[today] = []; changed = true; }
-                    if (!dailyData[today].some(t => t.text === task.text)) {
-                        dailyData[today].push({ text: task.text, priority: task.priority || 'prio-low', done: false });
+                    let incompleteSubtasks = [];
+
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        let totalSt = task.subtasks.length;
+                        let doneSt = task.subtasks.filter(st => st.done).length;
+                        let stPercent = (doneSt / totalSt) * 100;
+
+                        task.subtasks.forEach(st => {
+                            if (!st.done && !st.rolledOver) {
+                                st.rolledOver = true; // Mark specifically this subtask as missed
+                                incompleteSubtasks.push({ text: st.text, done: false });
+                                changed = true;
+                            }
+                        });
+
+                        if (stPercent >= 60) {
+                            task.done = true; // 60% se upar toh task pass!
+                            changed = true;
+                        } else {
+                            task.rolledOver = true; // Task completely missed
+                            changed = true;
+                        }
+
+                        // Agle din sirf incomplete subtasks bhejenge
+                        if (incompleteSubtasks.length > 0) {
+                            if (!dailyData[todayStr]) { dailyData[todayStr] = []; }
+                            
+                            let existingTask = dailyData[todayStr].find(t => t.text === task.text);
+                            if (!existingTask) {
+                                dailyData[todayStr].push({ 
+                                    text: task.text, 
+                                    priority: task.priority || 'prio-low', 
+                                    done: false,
+                                    subtasks: incompleteSubtasks,
+                                    stCollapsed: false // Open it up so user sees them
+                                });
+                            } else {
+                                if(!existingTask.subtasks) existingTask.subtasks = [];
+                                incompleteSubtasks.forEach(ist => {
+                                    if(!existingTask.subtasks.some(est => est.text === ist.text)) {
+                                        existingTask.subtasks.push(ist);
+                                    }
+                                });
+                                existingTask.done = false;
+                            }
+                            changed = true;
+                        }
+
+                    } else {
+                        // Normal task without subtasks
+                        task.rolledOver = true;
                         changed = true;
+                        if (!dailyData[todayStr]) { dailyData[todayStr] = []; }
+                        if (!dailyData[todayStr].some(t => t.text === task.text)) {
+                            dailyData[todayStr].push({ text: task.text, priority: task.priority || 'prio-low', done: false });
+                        }
                     }
                 }
-            }
-            );
+            });
         }
     });
     if (changed) { save(); calculateStreak(); }
@@ -759,20 +763,22 @@ function renderTask(date, task, idx) {
     li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
     li.addEventListener('dragleave', handleDragLeaveDay); li.addEventListener('drop', handleDropDay); li.addEventListener('dragend', handleDragEndDay);
     
-    // Subtask HTML Build karna
     let subtasksHTML = '';
     let hasSubtasks = task.subtasks && task.subtasks.length > 0;
     
-    // Toggle Button (Retractable Arrow)
     let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
     
     if(hasSubtasks) {
         subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
         task.subtasks.forEach((st, sIdx) => {
+            // 🔥 NAYA: Only mark this specific subtask as MISSED if it was not done and rolledOver
+            let isStMissed = st.rolledOver || (task.rolledOver && !st.done);
+            let stDisplayText = isStMissed ? '❌ MISSED: ' + st.text : st.text;
+            
             subtasksHTML += `
                 <li class="subtask-item">
                     <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
-                    <span class="subtask-text ${st.done ? 'done' : ''}" contenteditable="true" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${st.text}</span>
+                    <span class="subtask-text ${st.done ? 'done' : ''}" contenteditable="true" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${stDisplayText}</span>
                     <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
                 </li>
             `;
@@ -938,7 +944,6 @@ function manualArchive() {
                 prioStats[pKey].tot++;
                 if (t.done) { completedTasks++; dayDone++; prioStats[pKey].done++; } 
                 
-                // Track subtasks
                 if(t.subtasks && t.subtasks.length > 0) {
                     t.subtasks.forEach(st => {
                         totalSubtasks++;
@@ -1300,7 +1305,7 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
 }
 
 function editSubtask(date, tIdx, sIdx, element) {
-    let text = element.innerText.trim().toUpperCase();
+    let text = element.innerText.replace('❌ MISSED: ', '').trim().toUpperCase();
     if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
     dailyData[date][tIdx].subtasks[sIdx].text = text; save();
 }
