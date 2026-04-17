@@ -522,7 +522,7 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
-/* --- 💀 NO EXCUSES MODE: 70% THRESHOLD + EMPTY DAY PENALTY --- */
+/* --- 🔥 UPGRADED: PROPORTIONAL MICRO-PROGRESS & STREAK TRACKING --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
@@ -530,36 +530,41 @@ function calculateStreak() {
     const sortedDates = Object.keys(dailyData).sort();
 
     sortedDates.forEach(dateStr => {
-        // Agar task nahi hai toh empty array maan lo
         let tasks = dailyData[dateStr] || []; 
         let totalTasks = tasks.length;
         
-        if (dateStr < todayStr) {
-            // PAST DAYS (Beete hue din)
+        if (dateStr < todayStr || dateStr === todayStr) {
             if (totalTasks > 0) {
-                let doneCount = tasks.filter(t => t.done).length;
-                let completionPercentage = (doneCount / totalTasks) * 100;
-                
-                if (completionPercentage >= 70) {
-                    streak += 1; // 70% done, streak badhti jayegi
-                } else {
-                    streak = 0; // Failed the 70% rule
+                let dailyPercent = 0;
+                let weightPerTask = 100 / totalTasks;
+
+                tasks.forEach(task => {
+                    // Agar subtasks hain, toh unka percentage nikalo
+                    if (task.subtasks && task.subtasks.length > 0) {
+                        let doneSubtasks = task.subtasks.filter(st => st.done).length;
+                        let subtaskRatio = doneSubtasks / task.subtasks.length;
+                        dailyPercent += (subtaskRatio * weightPerTask);
+                    } else {
+                        // Main task normal tick
+                        if (task.done) dailyPercent += weightPerTask;
+                    }
+                });
+
+                let completionPercentage = Math.round(dailyPercent);
+
+                if (dateStr < todayStr) {
+                    if (completionPercentage >= 70) {
+                        streak += 1; 
+                    } else {
+                        streak = 0; 
+                    }
+                } else if (dateStr === todayStr) {
+                    if (completionPercentage >= 70) {
+                        streak += 1;
+                    }
                 }
-            } else {
-                // 🔥 LOOPHOLE KILLED: Din add kiya par task 0? Matab AALAS = STREAK ZERO!
-                streak = 0; 
-            }
-        } else if (dateStr === todayStr) {
-            // TODAY (Aaj ka din)
-            // Aaj ke din penalty tabhi milegi jab aaj ka din khatam hoga (kal)
-            // Lekin agar aaj ka 70% kaam ho gaya, toh streak +1 ho jayegi
-            if (totalTasks > 0) {
-                let doneCount = tasks.filter(t => t.done).length;
-                let completionPercentage = (doneCount / totalTasks) * 100;
-                
-                if (completionPercentage >= 70) {
-                    streak += 1;
-                }
+            } else if (dateStr < todayStr) {
+                streak = 0; // Empty day penalty
             }
         }
     });
@@ -567,6 +572,37 @@ function calculateStreak() {
     const streakElement = document.getElementById('streakCount');
     if(streakElement) streakElement.innerText = streak;
 }
+
+/* --- 🔥 UPGRADED: PROPORTIONAL PROGRESS BAR UPDATE --- */
+function updateProgress(date) {
+    const tasks = dailyData[date] || [];
+    
+    if (tasks.length === 0) {
+        if(document.getElementById(`prog-${date}`)) document.getElementById(`prog-${date}`).style.width = "0%";
+        if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = "0%";
+        return;
+    }
+
+    let totalPercent = 0;
+    let weightPerTask = 100 / tasks.length;
+
+    tasks.forEach(task => {
+        if (task.subtasks && task.subtasks.length > 0) {
+            let doneSubtasks = task.subtasks.filter(st => st.done).length;
+            let subtaskRatio = doneSubtasks / task.subtasks.length;
+            totalPercent += (subtaskRatio * weightPerTask);
+        } else {
+            if (task.done) {
+                totalPercent += weightPerTask;
+            }
+        }
+    });
+
+    const finalPercent = Math.round(totalPercent);
+    if(document.getElementById(`prog-${date}`)) document.getElementById(`prog-${date}`).style.width = finalPercent + "%";
+    if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = finalPercent + "%";
+}
+
 
 function checkRollover() {
     const today = new Date().toISOString().split('T')[0]; let changed = false;
@@ -634,7 +670,6 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
-/* --- UPDATED: RENDER DAILY CARD WITH UL DROP HANDLERS --- */
 function renderDailyCard(date) {
     const todayStr = new Date().toISOString().split('T')[0]; const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
@@ -663,7 +698,6 @@ function addTask(date) {
     updateProgress(date); save(); calculateStreak(); document.getElementById(`in-${date}`).value = "";
 }
 
-/* --- UPGRADED: CROSS-DAY DRAG AND DROP LOGIC --- */
 let dragSourceDay = null;
 function handleDragStartDay(e) { dragSourceDay = this; e.dataTransfer.effectAllowed = 'move'; this.style.opacity = '0.4'; }
 function handleDragOverDay(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; this.style.borderTop = '2px solid var(--primary)'; return false; }
@@ -704,7 +738,7 @@ function handleDropUl(e, targetDate) {
         const fromIdx = parseInt(dragSourceDay.dataset.index);
 
         let [movedItem] = dailyData[sourceDate].splice(fromIdx, 1);
-        dailyData[targetDate].push(movedItem); // Drop at the bottom of the new day
+        dailyData[targetDate].push(movedItem); 
 
         if (sourceDate !== targetDate) {
             const fromUl = document.getElementById(`list-${sourceDate}`);
@@ -779,7 +813,6 @@ function cyclePriority(dot, date, idx) {
     sortTasks(date); save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
 }
 
-/* --- IN-APP CUSTOM CELEBRATION POPUP --- */
 function showCelebrationModal() {
     let modal = document.getElementById('celebModal');
     if (!modal) {
@@ -799,7 +832,6 @@ function showCelebrationModal() {
     openModal('celebModal');
 }
 
-/* --- UPDATED CHECK LOGIC: CUSTOM POPUP --- */
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(task) {
@@ -826,13 +858,6 @@ function handleCheck(date, idx, checkboxElement) {
             confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
         }
     }
-}
-
-function updateProgress(date) {
-    const tasks = dailyData[date], doneCount = (tasks || []).filter(t => t.done).length;
-    const percent = tasks?.length ? Math.round((doneCount / tasks.length) * 100) : 0;
-    if(document.getElementById(`prog-${date}`)) document.getElementById(`prog-${date}`).style.width = percent + "%";
-    if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = percent + "%";
 }
 
 function removeSpecificTask(date, idx) { 
@@ -889,7 +914,6 @@ function removeGoal(type, idx) {
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
 
-/* --- 🔥 UPGRADED MONTHLY REPORT: NOW INCLUDES SUBTASKS & ACTIONS --- */
 function manualArchive() {
     const now = new Date(); let targetMonth = now.getMonth(), targetYear = now.getFullYear();
     if (targetMonth === 0) { targetMonth = 12; targetYear -= 1; }
@@ -1128,7 +1152,6 @@ function renderExams() {
     let pending = [];
     let aced = [];
 
-    // Automation logic
     trackedExams.forEach(exam => {
         const [year, month, day] = exam.date.split('-');
         const examDate = new Date(year, month - 1, day);
@@ -1149,7 +1172,6 @@ function renderExams() {
 
     let html = "";
 
-    // 🏆 TROPHY ACCORDION (Click to Open)
     if (aced.length > 0) {
         html += `
         <details style="margin-bottom: 20px; outline: none;">
@@ -1170,7 +1192,6 @@ function renderExams() {
         </details>`;
     }
 
-    // 🎯 PENDING EXAMS
     if (pending.length > 0) {
         html += pending.map(exam => {
             let dTxt = "", bCol = "var(--primary)";
@@ -1225,10 +1246,9 @@ if ('serviceWorker' in navigator) {
     });
 }
 
-/* --- NEBULA SYNC: SUBTASK LOGIC --- */
 function toggleSubtaskList(date, idx) {
     let task = dailyData[date][idx];
-    task.stCollapsed = !task.stCollapsed; // State save ho jayegi!
+    task.stCollapsed = !task.stCollapsed;
     save();
     const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
     dailyData[date].forEach((t, i) => renderTask(date, t, i));
@@ -1246,8 +1266,8 @@ function addSubtask(date, idx) {
     
     if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
     dailyData[date][idx].subtasks.push({ text: text, done: false });
-    dailyData[date][idx].done = false; // Naya task add hone par main task incomplete ho jayega
-    dailyData[date][idx].stCollapsed = false; // Naya subtask add karte waqt list open ho jayegi
+    dailyData[date][idx].done = false; 
+    dailyData[date][idx].stCollapsed = false; 
     
     save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); calculateStreak();
