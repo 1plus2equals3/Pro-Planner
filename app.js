@@ -889,6 +889,7 @@ function removeGoal(type, idx) {
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
 
+/* --- 🔥 UPGRADED MONTHLY REPORT: NOW INCLUDES SUBTASKS & ACTIONS --- */
 function manualArchive() {
     const now = new Date(); let targetMonth = now.getMonth(), targetYear = now.getFullYear();
     if (targetMonth === 0) { targetMonth = 12; targetYear -= 1; }
@@ -897,6 +898,7 @@ function manualArchive() {
     if (!confirm(`Generate report for ${monthLabel}? (Daily timeline cards will NOT be deleted)`)) return;
 
     let totalTasks = 0, completedTasks = 0, daysFound = 0;
+    let totalSubtasks = 0, completedSubtasks = 0; 
     let prioStats = { high: {tot:0, done:0}, med: {tot:0, done:0}, low: {tot:0, done:0} };
     let dailyPercents = [];
 
@@ -911,6 +913,14 @@ function manualArchive() {
                 let pKey = p === 'prio-high' ? 'high' : (p === 'prio-med' ? 'med' : 'low');
                 prioStats[pKey].tot++;
                 if (t.done) { completedTasks++; dayDone++; prioStats[pKey].done++; } 
+                
+                // Track subtasks
+                if(t.subtasks && t.subtasks.length > 0) {
+                    t.subtasks.forEach(st => {
+                        totalSubtasks++;
+                        if(st.done) completedSubtasks++;
+                    });
+                }
             });
             let dayPerc = dayTot === 0 ? 0 : Math.round((dayDone/dayTot)*100);
             dailyPercents.push(dayPerc);
@@ -918,12 +928,14 @@ function manualArchive() {
     });
 
     if (daysFound > 0) {
-        const perc = Math.round((completedTasks / totalTasks) * 100) || 0;
-        const avgTasksPerDay = (totalTasks / daysFound).toFixed(1);
+        const overallCompleted = completedTasks + completedSubtasks;
+        const overallTotal = totalTasks + totalSubtasks;
+        const perc = overallTotal === 0 ? 0 : Math.round((overallCompleted / overallTotal) * 100);
+        const avgTasksPerDay = (overallTotal / daysFound).toFixed(1);
 
         reports.push({ 
-            id: Date.now(), month: monthLabel, stats: `${perc}% DONE`, details: `${completedTasks}/${totalTasks} TASKS`,
-            advanced: { prioStats, totalTasks, completedTasks, daysFound, avgTasksPerDay, dailyPercents }
+            id: Date.now(), month: monthLabel, stats: `${perc}% DONE`, details: `${overallCompleted}/${overallTotal} ACTIONS`, 
+            advanced: { prioStats, totalTasks, completedTasks, totalSubtasks, completedSubtasks, daysFound, avgTasksPerDay, dailyPercents }
         });
         localStorage.setItem('vibeReports', JSON.stringify(reports)); save(); renderReports(); calculateStreak(); 
         alert(`${monthLabel} archived successfully!`);
@@ -956,20 +968,38 @@ function viewReport(id) {
     document.getElementById('reportModalTitle').innerText = `📊 ${r.month} REPORT`;
     
     let avgTasks = r.advanced && r.advanced.avgTasksPerDay ? r.advanced.avgTasksPerDay : "-";
+    let completedActions = r.details.split('/')[0];
+    let totalActions = r.details.split('/')[1].split(' ')[0];
+    let missedActions = parseInt(totalActions) - parseInt(completedActions);
     
     let content = `<div style="display:flex; justify-content:space-between; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:10px;">
         <div style="text-align:center; flex:1; min-width:80px;"><div style="font-size:1.6rem; color:var(--primary); font-weight:900;">${r.stats}</div><div style="font-size:0.6rem; opacity:0.7;">EFFICIENCY</div></div>
-        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--done-green); font-weight:900;">${r.details.split('/')[0]}</div><div style="font-size:0.6rem; opacity:0.7;">COMPLETED</div></div>
-        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--missed); font-weight:900;">${parseInt(r.details.split('/')[1]) - parseInt(r.details.split('/')[0])}</div><div style="font-size:0.6rem; opacity:0.7;">MISSED</div></div>
-        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--med); font-weight:900;">${avgTasks}</div><div style="font-size:0.6rem; opacity:0.7;">AVG / DAY</div></div>
+        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--done-green); font-weight:900;">${completedActions}</div><div style="font-size:0.6rem; opacity:0.7;">ACTIONS DONE</div></div>
+        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--missed); font-weight:900;">${missedActions}</div><div style="font-size:0.6rem; opacity:0.7;">MISSED</div></div>
+        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--med); font-weight:900;">${avgTasks}</div><div style="font-size:0.6rem; opacity:0.7;">AVG/DAY</div></div>
     </div>`;
 
     if (r.advanced) {
+        let tSub = r.advanced.totalSubtasks || 0;
+        let cSub = r.advanced.completedSubtasks || 0;
+        
+        content += `
+        <div style="display:flex; gap: 10px; margin-bottom: 20px;">
+            <div style="flex:1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem; opacity:0.7; margin-bottom: 5px; letter-spacing: 1px;">MAIN TASKS</div>
+                <div style="font-size:1.2rem; font-weight:900; color:var(--primary);">${r.advanced.completedTasks} <span style="font-size:0.8rem; opacity:0.5;">/ ${r.advanced.totalTasks}</span></div>
+            </div>
+            <div style="flex:1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
+                <div style="font-size:0.65rem; opacity:0.7; margin-bottom: 5px; letter-spacing: 1px;">SUBTASKS CRUSHED</div>
+                <div style="font-size:1.2rem; font-weight:900; color:var(--done-green);">${cSub} <span style="font-size:0.8rem; opacity:0.5;">/ ${tSub}</span></div>
+            </div>
+        </div>`;
+
         const p = r.advanced.prioStats;
         const hPerc = p.high.tot ? Math.round((p.high.done/p.high.tot)*100) : 0;
         const mPerc = p.med.tot ? Math.round((p.med.done/p.med.tot)*100) : 0;
         const lPerc = p.low.tot ? Math.round((p.low.done/p.low.tot)*100) : 0;
-        content += `<h3 style="font-size:0.8rem; color:var(--primary); letter-spacing:2px; margin-bottom:10px;">PRIORITY BREAKDOWN</h3>
+        content += `<h3 style="font-size:0.8rem; color:var(--primary); letter-spacing:2px; margin-bottom:10px;">MAIN TASK PRIORITY BREAKDOWN</h3>
         <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 20px;">
             <div style="background:rgba(255,118,117,0.1); padding:10px; border-radius:8px; border:1px solid rgba(255,118,117,0.3); text-align:center;">
                 <div style="color:var(--high); font-weight:900; margin-bottom:5px;">HIGH</div><div style="font-size:0.9rem;">${p.high.done}/${p.high.tot} <span style="font-size:0.7rem; opacity:0.7;">(${hPerc}%)</span></div>
