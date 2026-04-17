@@ -634,6 +634,7 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
+/* --- UPDATED: RENDER DAILY CARD WITH UL DROP HANDLERS --- */
 function renderDailyCard(date) {
     const todayStr = new Date().toISOString().split('T')[0]; const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
@@ -648,7 +649,7 @@ function renderDailyCard(date) {
             <select id="prio-${date}"><option value="prio-high" selected>HIGH</option><option value="prio-med">MED</option><option value="prio-low">LOW</option></select>
             <button class="add-btn" onclick="addTask('${date}')">+</button>
         </div>
-        <ul id="list-${date}"></ul>
+        <ul id="list-${date}" ondragover="handleDragOverUl(event)" ondrop="handleDropUl(event, '${date}')" style="min-height: 50px; padding-bottom: 20px;"></ul>
         <button class="remove-day-btn" onclick="removeDay('${date}')">REMOVE DAY</button>
     `;
     document.getElementById('daily-container').appendChild(card); init3DTilt(card);
@@ -662,21 +663,60 @@ function addTask(date) {
     updateProgress(date); save(); calculateStreak(); document.getElementById(`in-${date}`).value = "";
 }
 
+/* --- UPGRADED: CROSS-DAY DRAG AND DROP LOGIC --- */
 let dragSourceDay = null;
 function handleDragStartDay(e) { dragSourceDay = this; e.dataTransfer.effectAllowed = 'move'; this.style.opacity = '0.4'; }
 function handleDragOverDay(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; this.style.borderTop = '2px solid var(--primary)'; return false; }
 function handleDragLeaveDay(e) { this.style.borderTop = ''; }
 function handleDragEndDay(e) { this.style.opacity = '1'; document.querySelectorAll('li').forEach(li => li.style.borderTop = ''); }
+
 function handleDropDay(e) {
     e.stopPropagation(); this.style.borderTop = '';
-    if (dragSourceDay !== this) {
-        const date = this.dataset.date; if (dragSourceDay.dataset.date !== date) return false;
-        const fromIdx = parseInt(dragSourceDay.dataset.index), toIdx = parseInt(this.dataset.index);
-        let [movedItem] = dailyData[date].splice(fromIdx, 1); dailyData[date].splice(toIdx, 0, movedItem);
-        save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
-        dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    if (dragSourceDay && dragSourceDay !== this) {
+        const targetDate = this.dataset.date;
+        const sourceDate = dragSourceDay.dataset.date;
+        const fromIdx = parseInt(dragSourceDay.dataset.index);
+        const toIdx = parseInt(this.dataset.index);
+
+        let [movedItem] = dailyData[sourceDate].splice(fromIdx, 1);
+        dailyData[targetDate].splice(toIdx, 0, movedItem);
+
+        if (sourceDate !== targetDate) {
+            const fromUl = document.getElementById(`list-${sourceDate}`);
+            fromUl.innerHTML = ''; dailyData[sourceDate].forEach((t, i) => renderTask(sourceDate, t, i));
+            updateProgress(sourceDate);
+        }
+
+        save();
+        const toUl = document.getElementById(`list-${targetDate}`);
+        toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
+        updateProgress(targetDate); calculateStreak();
     }
     return false;
+}
+
+function handleDragOverUl(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; }
+
+function handleDropUl(e, targetDate) {
+    e.preventDefault();
+    if (e.target.id === `list-${targetDate}` && dragSourceDay) {
+        const sourceDate = dragSourceDay.dataset.date;
+        const fromIdx = parseInt(dragSourceDay.dataset.index);
+
+        let [movedItem] = dailyData[sourceDate].splice(fromIdx, 1);
+        dailyData[targetDate].push(movedItem); // Drop at the bottom of the new day
+
+        if (sourceDate !== targetDate) {
+            const fromUl = document.getElementById(`list-${sourceDate}`);
+            fromUl.innerHTML = ''; dailyData[sourceDate].forEach((t, i) => renderTask(sourceDate, t, i));
+            updateProgress(sourceDate);
+        }
+
+        save();
+        const toUl = document.getElementById(`list-${targetDate}`);
+        toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
+        updateProgress(targetDate); calculateStreak();
+    }
 }
 
 function renderTask(date, task, idx) {
@@ -1091,7 +1131,7 @@ function renderExams() {
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
                     <div>
                         <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
-                        <div style="font-size: 0.6rem; opacity: 0.6;">${exam.examDateStr}</div>
+                        <div style="font-size: 0.65rem; opacity: 0.6;">${exam.examDateStr}</div>
                     </div>
                     <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
                 </div>`).join('')}
