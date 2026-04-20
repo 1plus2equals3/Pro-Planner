@@ -522,7 +522,7 @@ function resetTimer() { setTimerMode(currentMode); }
 
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
-/* --- 🔥 UPGRADED: PROPORTIONAL MICRO-PROGRESS & STREAK TRACKING --- */
+/* --- 🔥 ULTIMATE STREAK LOGIC: 70% PROPORTIONAL THRESHOLD --- */
 function calculateStreak() {
     const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
@@ -550,16 +550,17 @@ function calculateStreak() {
                     }
                 });
 
-                let completionPercentage = Math.round(dailyPercent);
+                let finalDayScore = Math.round(dailyPercent);
 
                 if (dateStr < todayStr) {
-                    if (completionPercentage >= 70) {
+                    // BEETE HUE DIN: 70% achieved -> Streak Continues
+                    if (finalDayScore >= 70) {
                         streak += 1; 
                     } else {
                         streak = 0; 
                     }
                 } else if (dateStr === todayStr) {
-                    if (completionPercentage >= 70) {
+                    if (finalDayScore >= 70) {
                         streak += 1;
                     }
                 }
@@ -603,24 +604,43 @@ function updateProgress(date) {
     if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = finalPercent + "%";
 }
 
-
+/* --- 🔥 UPGRADED: SMART ROLLOVER (ONLY INCOMPLETE SUBTASKS) --- */
 function checkRollover() {
-    const today = new Date().toISOString().split('T')[0]; let changed = false;
-    Object.keys(dailyData).forEach(date => {
-        if (date < today) {
-            dailyData[date].forEach(task => {
+    const todayStr = new Date().toISOString().split('T')[0];
+    let changed = false;
+    
+    Object.keys(dailyData).forEach(dateStr => {
+        if (dateStr < todayStr) {
+            dailyData[dateStr].forEach(task => {
                 if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
-                    if (!dailyData[today]) { dailyData[today] = []; changed = true; }
-                    if (!dailyData[today].some(t => t.text === task.text)) {
-                        dailyData[today].push({ text: task.text, priority: task.priority || 'prio-low', done: false });
+                    
+                    if (!dailyData[todayStr]) { dailyData[todayStr] = []; changed = true; }
+                    
+                    if (!dailyData[todayStr].some(t => t.text === task.text)) {
+                        let newTask = { 
+                            text: task.text, 
+                            priority: task.priority || 'prio-low', 
+                            done: false,
+                            stCollapsed: task.stCollapsed || false
+                        };
+                        
+                        // Sirf incomplete subtasks ko aage bhejega
+                        if (task.subtasks && task.subtasks.length > 0) {
+                            let pendingSubtasks = task.subtasks.filter(st => !st.done);
+                            if (pendingSubtasks.length > 0) {
+                                newTask.subtasks = pendingSubtasks.map(st => ({ text: st.text, done: false }));
+                            }
+                        }
+                        
+                        dailyData[todayStr].push(newTask);
                         changed = true;
                     }
                 }
-            }
-            );
+            });
         }
     });
+    
     if (changed) { save(); calculateStreak(); }
 }
 
@@ -753,26 +773,38 @@ function handleDropUl(e, targetDate) {
     }
 }
 
+/* --- 🔥 UPGRADED: RENDER TASK WITH MISSED SUBTASK STYLING --- */
 function renderTask(date, task, idx) {
-    const li = document.createElement('li'); if (task.rolledOver) li.classList.add('missed-task');
+    const todayStr = new Date().toISOString().split('T')[0];
+    const li = document.createElement('li'); 
+    
+    // Agar din beet gaya hai aur task incomplete hai, toh 'missed-task' class lagegi
+    if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
+    
     li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
     li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
     li.addEventListener('dragleave', handleDragLeaveDay); li.addEventListener('drop', handleDropDay); li.addEventListener('dragend', handleDragEndDay);
     
-    // Subtask HTML Build karna
     let subtasksHTML = '';
     let hasSubtasks = task.subtasks && task.subtasks.length > 0;
-    
-    // Toggle Button (Retractable Arrow)
     let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
     
     if(hasSubtasks) {
         subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
         task.subtasks.forEach((st, sIdx) => {
+            let stClass = "";
+            if (st.done) stClass = "done";
+            
+            // Past day mein incomplete subtasks red honge (using missed-task class on li)
+            let liClass = "subtask-item";
+            if (date < todayStr && !st.done) liClass += " missed-task";
+
             subtasksHTML += `
-                <li class="subtask-item">
+                <li class="${liClass}">
                     <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
-                    <span class="subtask-text ${st.done ? 'done' : ''}" contenteditable="true" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${st.text}</span>
+                    <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+                        ${st.text}
+                    </span>
                     <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
                 </li>
             `;
@@ -787,7 +819,9 @@ function renderTask(date, task, idx) {
             <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
             <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
             ${toggleBtnHTML}
-            <span class="task-text ${task.done ? 'done' : ''}" contenteditable="true" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}</span>
+            <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+                ${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}
+            </span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
         </div>
@@ -938,7 +972,6 @@ function manualArchive() {
                 prioStats[pKey].tot++;
                 if (t.done) { completedTasks++; dayDone++; prioStats[pKey].done++; } 
                 
-                // Track subtasks
                 if(t.subtasks && t.subtasks.length > 0) {
                     t.subtasks.forEach(st => {
                         totalSubtasks++;
