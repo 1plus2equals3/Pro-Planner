@@ -539,13 +539,11 @@ function calculateStreak() {
                 let weightPerTask = 100 / totalTasks;
 
                 tasks.forEach(task => {
-                    // Agar subtasks hain, toh unka percentage nikalo
                     if (task.subtasks && task.subtasks.length > 0) {
                         let doneSubtasks = task.subtasks.filter(st => st.done).length;
                         let subtaskRatio = doneSubtasks / task.subtasks.length;
                         dailyPercent += (subtaskRatio * weightPerTask);
                     } else {
-                        // Main task normal tick
                         if (task.done) dailyPercent += weightPerTask;
                     }
                 });
@@ -553,7 +551,6 @@ function calculateStreak() {
                 let finalDayScore = Math.round(dailyPercent);
 
                 if (dateStr < todayStr) {
-                    // BEETE HUE DIN: 70% achieved -> Streak Continues
                     if (finalDayScore >= 70) {
                         streak += 1; 
                     } else {
@@ -625,7 +622,6 @@ function checkRollover() {
                             stCollapsed: task.stCollapsed || false
                         };
                         
-                        // Sirf incomplete subtasks ko aage bhejega
                         if (task.subtasks && task.subtasks.length > 0) {
                             let pendingSubtasks = task.subtasks.filter(st => !st.done);
                             if (pendingSubtasks.length > 0) {
@@ -773,12 +769,10 @@ function handleDropUl(e, targetDate) {
     }
 }
 
-/* --- 🔥 UPGRADED: RENDER TASK WITH MISSED SUBTASK STYLING --- */
 function renderTask(date, task, idx) {
     const todayStr = new Date().toISOString().split('T')[0];
     const li = document.createElement('li'); 
     
-    // Agar din beet gaya hai aur task incomplete hai, toh 'missed-task' class lagegi
     if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
     
     li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
@@ -795,7 +789,6 @@ function renderTask(date, task, idx) {
             let stClass = "";
             if (st.done) stClass = "done";
             
-            // Past day mein incomplete subtasks red honge (using missed-task class on li)
             let liClass = "subtask-item";
             if (date < todayStr && !st.done) liClass += " missed-task";
 
@@ -948,6 +941,7 @@ function removeGoal(type, idx) {
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
 
+/* --- 🔥 UPGRADED: TRUE ACTIONS REPORT LOGIC (NO DOUBLE PENALTY) --- */
 function manualArchive() {
     const now = new Date(); let targetMonth = now.getMonth(), targetYear = now.getFullYear();
     if (targetMonth === 0) { targetMonth = 12; targetYear -= 1; }
@@ -957,6 +951,7 @@ function manualArchive() {
 
     let totalTasks = 0, completedTasks = 0, daysFound = 0;
     let totalSubtasks = 0, completedSubtasks = 0; 
+    let executableTotal = 0, executableCompleted = 0; // True Actions Count
     let prioStats = { high: {tot:0, done:0}, med: {tot:0, done:0}, low: {tot:0, done:0} };
     let dailyPercents = [];
 
@@ -964,34 +959,55 @@ function manualArchive() {
         const d = new Date(dateStr);
         if (d.getMonth() + 1 === targetMonth && d.getFullYear() === targetYear) {
             daysFound++; 
-            let dayTot = 0, dayDone = 0;
-            dailyData[dateStr].forEach(t => { 
-                totalTasks++; dayTot++;
-                let p = t.priority || 'prio-low';
-                let pKey = p === 'prio-high' ? 'high' : (p === 'prio-med' ? 'med' : 'low');
-                prioStats[pKey].tot++;
-                if (t.done) { completedTasks++; dayDone++; prioStats[pKey].done++; } 
-                
-                if(t.subtasks && t.subtasks.length > 0) {
-                    t.subtasks.forEach(st => {
-                        totalSubtasks++;
-                        if(st.done) completedSubtasks++;
-                    });
-                }
-            });
-            let dayPerc = dayTot === 0 ? 0 : Math.round((dayDone/dayTot)*100);
-            dailyPercents.push(dayPerc);
+            let tasksThisDay = dailyData[dateStr];
+            let dayTot = tasksThisDay.length;
+            
+            if(dayTot > 0) {
+                let dailyPercent = 0;
+                let weightPerTask = 100 / dayTot;
+
+                tasksThisDay.forEach(t => { 
+                    totalTasks++; // For the detailed "MAIN TASKS" box
+                    let p = t.priority || 'prio-low';
+                    let pKey = p === 'prio-high' ? 'high' : (p === 'prio-med' ? 'med' : 'low');
+                    prioStats[pKey].tot++;
+                    
+                    if (t.done) { completedTasks++; prioStats[pKey].done++; } 
+                    
+                    // True Action tracking logic
+                    if(t.subtasks && t.subtasks.length > 0) {
+                        let doneSubCount = 0;
+                        t.subtasks.forEach(st => {
+                            totalSubtasks++;
+                            executableTotal++; // Action badha
+                            if(st.done) {
+                                completedSubtasks++;
+                                executableCompleted++;
+                                doneSubCount++;
+                            }
+                        });
+                        dailyPercent += ((doneSubCount / t.subtasks.length) * weightPerTask);
+                    } else {
+                        executableTotal++; // Bina subtask wala task khud action hai
+                        if(t.done) {
+                            executableCompleted++;
+                            dailyPercent += weightPerTask;
+                        }
+                    }
+                });
+                dailyPercents.push(Math.round(dailyPercent));
+            } else {
+                dailyPercents.push(0);
+            }
         }
     });
 
     if (daysFound > 0) {
-        const overallCompleted = completedTasks + completedSubtasks;
-        const overallTotal = totalTasks + totalSubtasks;
-        const perc = overallTotal === 0 ? 0 : Math.round((overallCompleted / overallTotal) * 100);
-        const avgTasksPerDay = (overallTotal / daysFound).toFixed(1);
+        const perc = executableTotal === 0 ? 0 : Math.round((executableCompleted / executableTotal) * 100);
+        const avgTasksPerDay = (executableTotal / daysFound).toFixed(1);
 
         reports.push({ 
-            id: Date.now(), month: monthLabel, stats: `${perc}% DONE`, details: `${overallCompleted}/${overallTotal} ACTIONS`, 
+            id: Date.now(), month: monthLabel, stats: `${perc}% DONE`, details: `${executableCompleted}/${executableTotal} ACTIONS`, 
             advanced: { prioStats, totalTasks, completedTasks, totalSubtasks, completedSubtasks, daysFound, avgTasksPerDay, dailyPercents }
         });
         localStorage.setItem('vibeReports', JSON.stringify(reports)); save(); renderReports(); calculateStreak(); 
