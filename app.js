@@ -708,8 +708,8 @@ function renderDailyCard(date) {
 }
 
 function addTask(date) {
-    const val = document.getElementById(`in-${date}`).value, prio = document.getElementById(`prio-${date}`).value; if(!val) return;
-    dailyData[date].push({ text: val.trim().toUpperCase(), priority: prio, done: false }); sortTasks(date);
+    const val = document.getElementById(`in-${date}`).value.trim(), prio = document.getElementById(`prio-${date}`).value; if(!val) return;
+    dailyData[date].push({ text: val, priority: prio, done: false }); sortTasks(date);
     const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); save(); calculateStreak(); document.getElementById(`in-${date}`).value = "";
 }
@@ -828,7 +828,7 @@ function renderTask(date, task, idx) {
 }
 
 function editTask(date, idx, element) {
-    let newText = element.innerText.replace('❌ MISSED: ', '').toUpperCase().trim();
+    let newText = element.innerText.replace('❌ MISSED: ', '').trim();
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
     dailyData[date][idx].text = newText; save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
     dailyData[date].forEach((t, i) => renderTask(date, t, i));
@@ -903,9 +903,9 @@ function scrollTimeline(amount) { document.getElementById('daily-container').scr
 function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
     const saved = JSON.parse(localStorage.getItem(type)) || [];
-    saved.push({text: inp.value.toUpperCase().trim(), done: false}); localStorage.setItem(type, JSON.stringify(saved));
+    saved.push({text: inp.value.trim(), done: false}); localStorage.setItem(type, JSON.stringify(saved));
     syncToFirebase();
-    renderGoal(type, inp.value.toUpperCase().trim(), false, saved.length - 1); inp.value = "";
+    renderGoal(type, inp.value.trim(), false, saved.length - 1); inp.value = "";
 }
 
 function renderGoal(type, text, done, idx) {
@@ -921,7 +921,7 @@ function renderGoal(type, text, done, idx) {
 function editGoal(type, idx, element) {
     let saved = JSON.parse(localStorage.getItem(type)); let text = element.innerText.trim();
     if (text === "") { element.innerText = saved[idx].text; return; }
-    saved[idx].text = text.toUpperCase(); localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
+    saved[idx].text = text; localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
 }
 
 function handleGoalCheck(type, idx, checkboxElement) {
@@ -1170,7 +1170,7 @@ function renderStats() {
 }
 
 function addExam() {
-    const name = document.getElementById('examName').value.toUpperCase().trim();
+    const name = document.getElementById('examName').value.trim();
     const date = document.getElementById('examDate').value;
     if(!name || !date) return;
     trackedExams.push({ id: Date.now(), name, date }); 
@@ -1231,7 +1231,7 @@ function renderExams() {
                 ${aced.map(exam => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
                     <div>
-                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
+                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green); text-transform: uppercase;">${exam.name}</div>
                         <div style="font-size: 0.65rem; opacity: 0.6;">${exam.examDateStr}</div>
                     </div>
                     <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
@@ -1249,7 +1249,7 @@ function renderExams() {
 
             return `
             <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-                <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
+                <div><div style="font-weight: 900; font-size: 0.9rem; text-transform: uppercase;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
                 <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
             </div>`;
         }).join('');
@@ -1311,7 +1311,7 @@ function toggleSubtaskInput(date, idx) {
 
 function addSubtask(date, idx) {
     const input = document.getElementById(`st-in-${date}-${idx}`);
-    const text = input.value.trim().toUpperCase(); if(!text) return;
+    const text = input.value.trim(); if(!text) return;
     
     if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
     dailyData[date][idx].subtasks.push({ text: text, done: false });
@@ -1349,7 +1349,7 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
 }
 
 function editSubtask(date, tIdx, sIdx, element) {
-    let text = element.innerText.trim().toUpperCase();
+    let text = element.innerText.trim();
     if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
     dailyData[date][tIdx].subtasks[sIdx].text = text; save();
 }
