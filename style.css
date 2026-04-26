@@ -38,7 +38,6 @@ header h1:hover { transform: scale(1.05); text-shadow: 0 0 20px var(--primary); 
 .draggable-nav:active { cursor: grabbing !important; transform: scale(0.95); }
 .streak-badge { font-size: 0.75rem; background: rgba(255,118,117,0.15); padding: 6px 12px; border-radius: 10px; border: 1px solid rgba(255,118,117,0.4); font-weight: 900; box-shadow: 0 0 10px rgba(255,118,117,0.3); }
 
-/* NEON & LIQUID BUTTON EFFECTS */
 button.action-btn { cursor: pointer; border: none; border-radius: 6px; background: var(--surface); color: white; padding: 6px 12px; font-weight: 900; font-size: 0.7rem; border: 1px solid rgba(255,255,255,0.15); transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(5px); letter-spacing: 1px; box-shadow: 0 0 8px rgba(162, 155, 254, 0.1); position: relative; overflow: hidden; }
 button.action-btn::after { content: ''; position: absolute; top: 50%; left: 50%; width: 150%; height: 150%; background: radial-gradient(circle, rgba(255,255,255,0.2) 10%, transparent 40%); transform: translate(-50%, -50%) scale(0); border-radius: 50%; transition: transform 0.5s ease-out; }
 button.action-btn:hover::after { transform: translate(-50%, -50%) scale(1); }
@@ -74,11 +73,14 @@ button.action-btn.accent:hover { box-shadow: 0 0 25px var(--primary), 0 0 50px v
 .progress-container { width: 100%; height: 8px; background: rgba(0,0,0,0.5); border-radius: 4px; margin-bottom: 20px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05);}
 .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #fff); transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px var(--primary);}
 
-/* --- NEW: TIME PICKER STYLING --- */
-.input-group { display: flex; gap: 8px; margin-bottom: 10px; width: 100%; align-items: center;}
-.input-group input[type="text"] { flex-grow: 1; }
-.icon-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--primary); padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; }
+/* --- BUG FIX: SLEEK & COMPACT INPUT GROUP --- */
+.input-group { display: flex; flex-wrap: nowrap; gap: 6px; margin-bottom: 12px; width: 100%; align-items: center; overflow: visible;}
+.input-group input[type="text"] { flex-grow: 1; min-width: 0; padding: 10px; font-size: 0.75rem;}
+.icon-btn { flex-shrink: 0; padding: 8px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--primary); border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; }
 .icon-btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); transform: scale(1.05); border-color: transparent;}
+.input-group select { flex-shrink: 0; padding: 8px 4px; font-size: 0.7rem; width: auto; max-width: 80px; }
+.input-group .add-btn { flex-shrink: 0; padding: 10px 14px; }
+
 .time-picker-row { display: none; gap: 8px; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px; animation: slideDown 0.2s ease-out; }
 .time-picker-row.show { display: flex; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
@@ -105,9 +107,11 @@ li:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); borde
 .prio-med { background: var(--med); box-shadow: 0 0 8px var(--med); }
 .prio-low { background: var(--low); box-shadow: 0 0 8px var(--low); }
 
-/* --- NEW: TIME BADGE --- */
-.time-badge { background: rgba(162, 155, 254, 0.1); border: 1px solid rgba(162, 155, 254, 0.3); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; letter-spacing: 0.5px; font-weight: 900; margin-right: 4px; white-space: nowrap; cursor: help; transition: 0.3s;}
-li:hover .time-badge { background: rgba(162, 155, 254, 0.2); box-shadow: 0 0 8px rgba(162, 155, 254, 0.3); }
+/* --- NEW: MINIMAL HOVER-CLOCK ICON FOR TASKS --- */
+.task-clock-icon { color: var(--primary); opacity: 0.7; cursor: help; display: flex; align-items: center; justify-content: center; transition: 0.3s; flex-shrink: 0; }
+.task-clock-icon:hover { opacity: 1; filter: drop-shadow(0 0 8px var(--primary)); transform: scale(1.1); }
+li.missed-task .task-clock-icon { color: var(--missed); opacity: 0.6; }
+li.missed-task .task-clock-icon:hover { filter: drop-shadow(0 0 8px var(--missed)); }
 
 @keyframes checkPulse {
     0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.8); }
@@ -121,8 +125,7 @@ li:hover .time-badge { background: rgba(162, 155, 254, 0.2); box-shadow: 0 0 8px
 
 .task-text { flex-grow: 1; outline: none; cursor: text; line-height: 1.4; word-break: break-word; transition: all 0.3s ease; }
 .task-text.done { text-decoration: line-through; text-decoration-color: var(--done-green); text-decoration-thickness: 2px; color: rgba(255,255,255,0.4); font-style: italic;}
-li.missed-task span { text-decoration: line-through; text-decoration-color: var(--missed); text-decoration-thickness: 2px; color: var(--missed); opacity: 0.8; }
-li.missed-task .time-badge { color: var(--missed); border-color: var(--missed); background: rgba(255,118,117,0.1); }
+li.missed-task span.task-text { text-decoration: line-through; text-decoration-color: var(--missed); text-decoration-thickness: 2px; color: var(--missed); opacity: 0.8; }
 
 .task-del { color: rgba(255,255,255,0.3); cursor: pointer; font-size: 1.2rem; margin-left: auto; background: none; border: none; font-weight: bold; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .task-del:hover { color: #ff7675; transform: scale(1.3) rotate(90deg); text-shadow: 0 0 20px #ff7675;}

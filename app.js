@@ -673,7 +673,6 @@ function checkRollover() {
     if (changed) { save(); calculateStreak(); }
 }
 
-/* --- 🔥 UPGRADED CHRONOLOGICAL SORTING WITH TIME BLOCKS --- */
 function sortTasks(date) {
     const prioMap = { 'prio-high': 1, 'prio-med': 2, 'prio-low': 3 };
     if(dailyData[date]) { 
@@ -738,7 +737,6 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
-/* --- 🔥 UPGRADED CARD RENDER WITH SLEEK CLOCK BUTTON --- */
 function renderDailyCard(date) {
     const todayStr = new Date().toISOString().split('T')[0]; const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
@@ -770,7 +768,6 @@ function renderDailyCard(date) {
     sortTasks(date); dailyData[date].forEach((t, idx) => renderTask(date, t, idx)); updateProgress(date);
 }
 
-/* --- 🔥 UPGRADED ADD TASK LOGIC FOR TIME BLOCKS --- */
 function addTask(date) {
     const val = document.getElementById(`in-${date}`).value;
     const prio = document.getElementById(`prio-${date}`).value; 
@@ -791,7 +788,6 @@ function addTask(date) {
     
     updateProgress(date); save(); calculateStreak(); 
     
-    // Reset Inputs
     document.getElementById(`in-${date}`).value = "";
     document.getElementById(`st-time-${date}`).value = "";
     document.getElementById(`en-time-${date}`).value = "";
@@ -853,7 +849,6 @@ function handleDropUl(e, targetDate) {
     }
 }
 
-/* Helper functions for Time Display */
 function formatTime12h(time24) {
     if(!time24) return "";
     let [h, m] = time24.split(':');
@@ -867,7 +862,7 @@ function getDuration(start, end) {
     let [sh, sm] = start.split(':').map(Number);
     let [eh, em] = end.split(':').map(Number);
     let diff = (eh*60+em) - (sh*60+sm);
-    if(diff < 0) diff += 24*60; // if crosses midnight
+    if(diff < 0) diff += 24*60; 
     let h = Math.floor(diff/60);
     let m = diff%60;
     let res = [];
@@ -876,7 +871,6 @@ function getDuration(start, end) {
     return res.join(' ');
 }
 
-/* --- 🔥 UPGRADED TASK RENDERER FOR BADGES --- */
 function renderTask(date, task, idx) {
     const todayStr = new Date().toISOString().split('T')[0];
     const li = document.createElement('li'); 
@@ -917,7 +911,13 @@ function renderTask(date, task, idx) {
         let duration = getDuration(task.startTime, task.endTime);
         let timeStr = formatTime12h(task.startTime);
         if (task.endTime) timeStr += ` - ${formatTime12h(task.endTime)}`;
-        timeBadgeHTML = `<span class="time-badge" title="${duration ? 'Duration: '+duration : 'Start Time'}">${timeStr}</span>`;
+        let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
+        
+        timeBadgeHTML = `
+            <div class="task-clock-icon" title="${tooltipText}">
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+        `;
     }
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
@@ -1207,6 +1207,7 @@ function viewReport(id) {
                 if (barH < 2) barH = 2; 
                 let x = (i * barTotalW) + (barTotalW / 2) - (barW / 2);
                 let y = svgH - barH;
+                
                 bars += `<rect x="${x}" y="${y}" width="${barW}" height="${barH}" fill="var(--primary)" rx="3" style="cursor:pointer; transition: all 0.2s ease;" onmouseover="this.setAttribute('fill', 'var(--done-green)')" onmouseout="this.setAttribute('fill', 'var(--primary)')"><title>Day ${i+1}: ${perc}%</title></rect>`;
             });
 
