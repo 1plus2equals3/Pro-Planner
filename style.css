@@ -20,7 +20,6 @@ body {
     margin: 0; min-height: 100vh; display: flex; flex-direction: column;
     color: var(--text-color); background-color: #000; user-select: none;
     overflow-y: auto; overflow-x: hidden; font-weight: 700; 
-    /* Yahan se text-transform: uppercase hata diya gaya hai */
 }
 
 .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; background-color: #050505;}
@@ -75,10 +74,20 @@ button.action-btn.accent:hover { box-shadow: 0 0 25px var(--primary), 0 0 50px v
 .progress-container { width: 100%; height: 8px; background: rgba(0,0,0,0.5); border-radius: 4px; margin-bottom: 20px; overflow: hidden; box-shadow: inset 0 2px 5px rgba(0,0,0,0.5); border: 1px solid rgba(255,255,255,0.05);}
 .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #fff); transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px var(--primary);}
 
-.input-group { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-bottom: 20px; width: 100%; }
-input[type="text"], input[type="date"], input[type="month"], input[type="number"], select, textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); outline: none; background: rgba(0,0,0,0.4); color: #fff; font-weight: 800; font-size: 0.75rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+/* --- NEW: TIME PICKER STYLING --- */
+.input-group { display: flex; gap: 8px; margin-bottom: 10px; width: 100%; align-items: center;}
+.input-group input[type="text"] { flex-grow: 1; }
+.icon-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--primary); padding: 8px; border-radius: 8px; cursor: pointer; transition: 0.3s; display: flex; justify-content: center; align-items: center; }
+.icon-btn:hover { background: var(--primary); color: #000; box-shadow: 0 0 15px var(--primary); transform: scale(1.05); border-color: transparent;}
+.time-picker-row { display: none; gap: 8px; align-items: center; justify-content: center; background: rgba(0,0,0,0.4); padding: 8px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 20px; animation: slideDown 0.2s ease-out; }
+.time-picker-row.show { display: flex; }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
+
+input[type="text"], input[type="time"], input[type="date"], input[type="month"], input[type="number"], select, textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); outline: none; background: rgba(0,0,0,0.4); color: #fff; font-weight: 800; font-size: 0.75rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 input[type="text"]::placeholder, textarea::placeholder { color: rgba(255,255,255,0.4); }
-input[type="text"]:focus, input[type="number"]:focus, textarea:focus { background: rgba(0,0,0,0.6); border-color: var(--primary); box-shadow: 0 0 20px rgba(162, 155, 254, 0.4); }
+input[type="text"]:focus, input[type="number"]:focus, textarea:focus, input[type="time"]:focus { background: rgba(0,0,0,0.6); border-color: var(--primary); box-shadow: 0 0 20px rgba(162, 155, 254, 0.4); }
+input[type="time"] { padding: 6px 10px; font-size: 0.7rem; color: var(--primary); }
+input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 select { background: rgba(20,20,20,0.9); cursor: pointer; }
 
 button.add-btn { cursor: pointer; border: none; border-radius: 8px; background: var(--primary); color: #000; padding: 10px 15px; font-weight: 900; font-size: 0.75rem; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 15px rgba(0,0,0,0.3), 0 0 10px rgba(162, 155, 254, 0.3); position: relative; overflow: hidden;}
@@ -96,6 +105,10 @@ li:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); borde
 .prio-med { background: var(--med); box-shadow: 0 0 8px var(--med); }
 .prio-low { background: var(--low); box-shadow: 0 0 8px var(--low); }
 
+/* --- NEW: TIME BADGE --- */
+.time-badge { background: rgba(162, 155, 254, 0.1); border: 1px solid rgba(162, 155, 254, 0.3); color: var(--primary); padding: 2px 6px; border-radius: 4px; font-size: 0.6rem; letter-spacing: 0.5px; font-weight: 900; margin-right: 4px; white-space: nowrap; cursor: help; transition: 0.3s;}
+li:hover .time-badge { background: rgba(162, 155, 254, 0.2); box-shadow: 0 0 8px rgba(162, 155, 254, 0.3); }
+
 @keyframes checkPulse {
     0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.8); }
     50% { transform: scale(1.3); box-shadow: 0 0 20px 10px rgba(0, 255, 136, 0); }
@@ -109,6 +122,7 @@ li:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); borde
 .task-text { flex-grow: 1; outline: none; cursor: text; line-height: 1.4; word-break: break-word; transition: all 0.3s ease; }
 .task-text.done { text-decoration: line-through; text-decoration-color: var(--done-green); text-decoration-thickness: 2px; color: rgba(255,255,255,0.4); font-style: italic;}
 li.missed-task span { text-decoration: line-through; text-decoration-color: var(--missed); text-decoration-thickness: 2px; color: var(--missed); opacity: 0.8; }
+li.missed-task .time-badge { color: var(--missed); border-color: var(--missed); background: rgba(255,118,117,0.1); }
 
 .task-del { color: rgba(255,255,255,0.3); cursor: pointer; font-size: 1.2rem; margin-left: auto; background: none; border: none; font-weight: bold; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 .task-del:hover { color: #ff7675; transform: scale(1.3) rotate(90deg); text-shadow: 0 0 20px #ff7675;}
@@ -183,57 +197,26 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
    📱 ULTRA-PREMIUM MOBILE OPTIMIZATION V2
    ========================================= */
 @media screen and (max-width: 768px) {
-    /* 1. Basic Resets & Native Touch Vibe */
     body, html { width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
-
-    /* 2. Header Fix (Clean Stacking) */
     header { flex-direction: column; padding: 15px 10px; gap: 15px; }
     header h1 { font-size: 1.5rem; letter-spacing: 3px; text-align: center; width: 100%; }
     .controls-row { justify-content: center; gap: 8px; width: 100%; }
     .action-btn, .streak-badge { padding: 10px 14px !important; font-size: 0.7rem !important; border-radius: 10px !important; }
-
-    /* 3. Dropdown Menu Centering for Mobile */
     .dropdown-menu { right: 50%; transform: translateX(50%); top: calc(100% + 10px); width: 200px; }
-
-    /* 4. BUG FIX: Hide Laptop Arrows on Mobile! 
-       Isse snap scrolling phone pe makkhan jaisi chalegi bina kisi conflict ke */
     .nav-controls .arrow { display: none !important; }
     .nav-controls { justify-content: center !important; margin-bottom: 20px;}
-
-    /* 5. Perfect Native Swipe Physics for Timeline */
-    #daily-container { 
-        padding: 10px 5vw 40px 5vw; 
-        gap: 15px; 
-        scroll-snap-type: x mandatory; 
-        -webkit-overflow-scrolling: touch;
-        scroll-padding: 0 5vw; /* Helps lock cards exactly in center */
-    }
-    #daily-container .card { 
-        min-width: 88vw !important; 
-        max-width: 88vw !important; 
-        scroll-snap-align: center; 
-        margin: 0; 
-        border-radius: 20px;
-    }
-
-    /* 6. Date/Month Pickers */
+    #daily-container { padding: 10px 5vw 40px 5vw; gap: 15px; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; scroll-padding: 0 5vw; }
+    #daily-container .card { min-width: 88vw !important; max-width: 88vw !important; scroll-snap-align: center; margin: 0; border-radius: 20px;}
     .date-selector-area { flex-direction: column; padding: 15px; width: 90%; margin: 0 auto 20px auto; border-radius: 15px;}
     .date-selector-area span { display: none; } 
     .date-selector-area input { width: 100%; padding: 12px !important; font-size: 0.85rem !important;}
-
-    /* 7. Bottom Goals (Full Width & Auto Height) */
     .bottom-goals { flex-direction: column; padding: 15px; gap: 20px; }
     .bottom-goals .card { min-width: 100% !important; max-width: 100% !important; height: auto !important; min-height: 300px; }
-
-    /* 8. Modal & Settings BUG FIX (Stack them vertically so they don't squish) */
     .modal-card { width: 92% !important; max-height: 85vh; padding: 20px; border-radius: 20px; }
     .modal-card h2 { font-size: 1.2rem; }
-    
     .setting-row { flex-direction: column !important; align-items: flex-start !important; gap: 10px; padding: 10px 0; }
     .setting-row input[type="number"], .setting-row input[type="range"], .setting-row select { width: 100% !important; margin-top: 5px; }
     .color-picker { width: 100%; justify-content: flex-start; }
-
-    /* 9. Typography adjustments */
     .timer-display { font-size: 3.5rem; letter-spacing: 4px;}
     .quote-banner { font-size: 0.65rem; padding: 10px; line-height: 1.5; }
 }
