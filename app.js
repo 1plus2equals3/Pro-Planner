@@ -16,6 +16,14 @@ const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
 let currentUser = null;
 
+/* --- FORMATTING HELPER (Title Case) --- */
+function toTitleCase(str) {
+    if (!str) return "";
+    return str.toLowerCase().split(/\s+/).map(word => {
+        return word.charAt(0).toUpperCase() + word.slice(1);
+    }).join(' ');
+}
+
 auth.onAuthStateChanged(async (user) => {
     const btn = document.getElementById('authBtnModal');
     const status = document.getElementById('syncStatus');
@@ -343,7 +351,8 @@ function setCustomReminder() {
     const msg = document.getElementById('customRemMsg').value;
     const mins = parseInt(document.getElementById('customRemTime').value);
     if(!msg || !mins || mins <= 0) { alert("Please enter a valid message and time."); return; }
-    setTimeout(() => { playAlarm(); showNotification("🔔 REMINDER", msg.toUpperCase()); }, mins * 60 * 1000);
+    // Notification uses Title Case for custom message
+    setTimeout(() => { playAlarm(); showNotification("🔔 REMINDER", toTitleCase(msg)); }, mins * 60 * 1000);
     document.getElementById('customRemMsg').value = ''; document.getElementById('customRemTime').value = '';
     alert(`Reminder set for ${mins} minute(s) from now!`);
 }
@@ -382,8 +391,8 @@ function applySettings() {
     document.getElementById('notifToggle').checked = settings.notificationsEnabled;
     document.getElementById('notifToggleCheck').classList.toggle('checked', settings.notificationsEnabled);
 
-    document.getElementById('workMsgInput').value = settings.workMsg || "TIME FOR A BREAK! ☕";
-    document.getElementById('breakMsgInput').value = settings.breakMsg || "BACK TO WORK! 🚀";
+    document.getElementById('workMsgInput').value = settings.workMsg || "Time For A Break! ☕";
+    document.getElementById('breakMsgInput').value = settings.breakMsg || "Back To Work! 🚀";
     
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) hInput.value = settings.hundredPercentMsg;
@@ -420,8 +429,8 @@ function saveSettings() {
     settings.soundEnabled = document.getElementById('soundToggle').checked;
     settings.soundType = document.getElementById('soundTypeSelect').value;
     settings.notificationsEnabled = document.getElementById('notifToggle').checked;
-    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "TIME FOR A BREAK! ☕";
-    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "BACK TO WORK! 🚀";
+    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "Time For A Break! ☕";
+    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "Back To Work! 🚀";
 
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
@@ -709,7 +718,7 @@ function renderDailyCard(date) {
 
 function addTask(date) {
     const val = document.getElementById(`in-${date}`).value, prio = document.getElementById(`prio-${date}`).value; if(!val) return;
-    dailyData[date].push({ text: val.trim().toUpperCase(), priority: prio, done: false }); sortTasks(date);
+    dailyData[date].push({ text: toTitleCase(val.trim()), priority: prio, done: false }); sortTasks(date);
     const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
     updateProgress(date); save(); calculateStreak(); document.getElementById(`in-${date}`).value = "";
 }
@@ -813,7 +822,7 @@ function renderTask(date, task, idx) {
             <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
             ${toggleBtnHTML}
             <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-                ${task.rolledOver ? '❌ MISSED: ' + task.text : task.text}
+                ${task.rolledOver ? '❌ Missed: ' + task.text : task.text}
             </span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
@@ -828,7 +837,7 @@ function renderTask(date, task, idx) {
 }
 
 function editTask(date, idx, element) {
-    let newText = element.innerText.replace('❌ MISSED: ', '').toUpperCase().trim();
+    let newText = toTitleCase(element.innerText.replace('❌ Missed: ', '').replace('❌ MISSED: ', '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
     dailyData[date][idx].text = newText; save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
     dailyData[date].forEach((t, i) => renderTask(date, t, i));
@@ -903,9 +912,9 @@ function scrollTimeline(amount) { document.getElementById('daily-container').scr
 function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
     const saved = JSON.parse(localStorage.getItem(type)) || [];
-    saved.push({text: inp.value.toUpperCase().trim(), done: false}); localStorage.setItem(type, JSON.stringify(saved));
+    saved.push({text: toTitleCase(inp.value.trim()), done: false}); localStorage.setItem(type, JSON.stringify(saved));
     syncToFirebase();
-    renderGoal(type, inp.value.toUpperCase().trim(), false, saved.length - 1); inp.value = "";
+    renderGoal(type, toTitleCase(inp.value.trim()), false, saved.length - 1); inp.value = "";
 }
 
 function renderGoal(type, text, done, idx) {
@@ -921,7 +930,7 @@ function renderGoal(type, text, done, idx) {
 function editGoal(type, idx, element) {
     let saved = JSON.parse(localStorage.getItem(type)); let text = element.innerText.trim();
     if (text === "") { element.innerText = saved[idx].text; return; }
-    saved[idx].text = text.toUpperCase(); localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
+    saved[idx].text = toTitleCase(text); localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
 }
 
 function handleGoalCheck(type, idx, checkboxElement) {
@@ -941,7 +950,6 @@ function removeGoal(type, idx) {
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
 
-/* --- 🔥 UPGRADED: TRUE ACTIONS REPORT LOGIC (NO DOUBLE PENALTY) --- */
 function manualArchive() {
     const now = new Date(); let targetMonth = now.getMonth(), targetYear = now.getFullYear();
     if (targetMonth === 0) { targetMonth = 12; targetYear -= 1; }
@@ -1170,7 +1178,7 @@ function renderStats() {
 }
 
 function addExam() {
-    const name = document.getElementById('examName').value.toUpperCase().trim();
+    const name = toTitleCase(document.getElementById('examName').value.trim());
     const date = document.getElementById('examDate').value;
     if(!name || !date) return;
     trackedExams.push({ id: Date.now(), name, date }); 
@@ -1311,7 +1319,7 @@ function toggleSubtaskInput(date, idx) {
 
 function addSubtask(date, idx) {
     const input = document.getElementById(`st-in-${date}-${idx}`);
-    const text = input.value.trim().toUpperCase(); if(!text) return;
+    const text = toTitleCase(input.value.trim()); if(!text) return;
     
     if(!dailyData[date][idx].subtasks) dailyData[date][idx].subtasks = [];
     dailyData[date][idx].subtasks.push({ text: text, done: false });
@@ -1349,7 +1357,7 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
 }
 
 function editSubtask(date, tIdx, sIdx, element) {
-    let text = element.innerText.trim().toUpperCase();
+    let text = toTitleCase(element.innerText.trim());
     if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
     dailyData[date][tIdx].subtasks[sIdx].text = text; save();
 }

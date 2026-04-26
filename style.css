@@ -19,7 +19,8 @@ body {
     font-family: 'Segoe UI', system-ui, sans-serif;
     margin: 0; min-height: 100vh; display: flex; flex-direction: column;
     color: var(--text-color); background-color: #000; user-select: none;
-    overflow-y: auto; overflow-x: hidden; font-weight: 700; text-transform: uppercase;
+    overflow-y: auto; overflow-x: hidden; font-weight: 700; 
+    /* Yahan se text-transform: uppercase hata diya gaya hai */
 }
 
 .bg-container { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -2; background-color: #050505;}
@@ -75,7 +76,7 @@ button.action-btn.accent:hover { box-shadow: 0 0 25px var(--primary), 0 0 50px v
 .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--primary), #fff); transition: width 0.6s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 0 15px var(--primary);}
 
 .input-group { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; margin-bottom: 20px; width: 100%; }
-input[type="text"], input[type="date"], input[type="month"], input[type="number"], select, textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); outline: none; background: rgba(0,0,0,0.4); color: #fff; font-weight: 800; font-size: 0.75rem; text-transform: uppercase; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
+input[type="text"], input[type="date"], input[type="month"], input[type="number"], select, textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); outline: none; background: rgba(0,0,0,0.4); color: #fff; font-weight: 800; font-size: 0.75rem; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); }
 input[type="text"]::placeholder, textarea::placeholder { color: rgba(255,255,255,0.4); }
 input[type="text"]:focus, input[type="number"]:focus, textarea:focus { background: rgba(0,0,0,0.6); border-color: var(--primary); box-shadow: 0 0 20px rgba(162, 155, 254, 0.4); }
 select { background: rgba(20,20,20,0.9); cursor: pointer; }
