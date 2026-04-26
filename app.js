@@ -16,7 +16,6 @@ const db = firebase.database();
 const provider = new firebase.auth.GoogleAuthProvider();
 let currentUser = null;
 
-/* --- FORMATTING HELPER (Title Case) --- */
 function toTitleCase(str) {
     if (!str) return "";
     return str.toLowerCase().split(/\s+/).map(word => {
@@ -76,6 +75,7 @@ async function syncToFirebase() {
             dailyData: JSON.stringify(dailyData),
             reports: JSON.stringify(reports),
             trackedExams: JSON.stringify(trackedExams),
+            habits: JSON.stringify(habitBlueprint),
             settings: JSON.stringify(settings),
             monthGoals: localStorage.getItem('month') || '[]',
             yearGoals: localStorage.getItem('year') || '[]'
@@ -97,6 +97,7 @@ async function loadDataFromFirebase() {
             if(data.dailyData) localStorage.setItem('vibeProFinal', data.dailyData);
             if(data.reports) localStorage.setItem('vibeReports', data.reports);
             if(data.trackedExams) localStorage.setItem('vibeExams', data.trackedExams);
+            if(data.habits) localStorage.setItem('vibeHabits', data.habits);
             if(data.settings) localStorage.setItem('vibeSettings', data.settings);
             if(data.monthGoals) localStorage.setItem('month', data.monthGoals);
             if(data.yearGoals) localStorage.setItem('year', data.yearGoals);
@@ -109,6 +110,7 @@ async function loadDataFromFirebase() {
 let dailyData = JSON.parse(localStorage.getItem('vibeProFinal')) || {};
 let reports = JSON.parse(localStorage.getItem('vibeReports')) || [];
 let trackedExams = JSON.parse(localStorage.getItem('vibeExams')) || [];
+let habitBlueprint = JSON.parse(localStorage.getItem('vibeHabits')) || [];
 
 let parsedSettings = JSON.parse(localStorage.getItem('vibeSettings')) || {};
 let settings = {
@@ -142,6 +144,7 @@ window.onload = () => {
     checkRollover(); 
     calculateStreak(); 
     renderReports();
+    renderHabitBlueprint();
     initNavDragDrop();
     
     const sortedDates = Object.keys(dailyData).sort();
@@ -351,7 +354,6 @@ function setCustomReminder() {
     const msg = document.getElementById('customRemMsg').value;
     const mins = parseInt(document.getElementById('customRemTime').value);
     if(!msg || !mins || mins <= 0) { alert("Please enter a valid message and time."); return; }
-    // Notification uses Title Case for custom message
     setTimeout(() => { playAlarm(); showNotification("🔔 REMINDER", toTitleCase(msg)); }, mins * 60 * 1000);
     document.getElementById('customRemMsg').value = ''; document.getElementById('customRemTime').value = '';
     alert(`Reminder set for ${mins} minute(s) from now!`);
@@ -362,6 +364,7 @@ function openModal(id) {
     modal.style.display = 'flex'; void modal.offsetWidth; modal.classList.add('show');
     if(id === 'statsModal') renderStats();
     if(id === 'examModal') renderExams();
+    if(id === 'habitsModal') renderHabitBlueprint();
 }
 
 function closeModal(id) {
@@ -443,7 +446,6 @@ function saveSettings() {
     if(!isRunning) setTimerMode(currentMode);
 }
 
-/* --- AESTHETIC UPGRADE: TIME-OF-DAY DYNAMIC BACKGROUND --- */
 let bgInterval;
 function initBackground() {
     const bgContainer = document.getElementById('bgContainer');
@@ -610,19 +612,80 @@ function updateProgress(date) {
     if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = finalPercent + "%";
 }
 
-/* --- 🔥 UPGRADED: SMART ROLLOVER (ONLY INCOMPLETE SUBTASKS) --- */
+/* --- 🔥 HABIT BLUEPRINT & AUTO-INJECT LOGIC --- */
+function addHabit() {
+    const name = toTitleCase(document.getElementById('habitName').value.trim());
+    if(!name) return;
+    
+    // Add "🔄 " prefix to visually distinguish it as a habit
+    const habitText = "🔄 " + name;
+    habitBlueprint.push({ id: Date.now(), text: habitText }); 
+    localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
+    syncToFirebase();
+    document.getElementById('habitName').value = ''; 
+    renderHabitBlueprint();
+
+    // Auto-inject to today if today exists
+    const todayStr = new Date().toISOString().split('T')[0];
+    if(dailyData[todayStr]) {
+        if(!dailyData[todayStr].some(t => t.text === habitText)) {
+            dailyData[todayStr].push({ text: habitText, priority: 'prio-med', done: false });
+            save();
+            const ul = document.getElementById(`list-${todayStr}`);
+            if(ul) {
+                ul.innerHTML = ''; 
+                dailyData[todayStr].forEach((t, i) => renderTask(todayStr, t, i));
+            }
+            updateProgress(todayStr); calculateStreak();
+        }
+    }
+}
+
+function removeHabit(id) {
+    habitBlueprint = habitBlueprint.filter(h => h.id !== id); 
+    localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
+    syncToFirebase(); 
+    renderHabitBlueprint();
+}
+
+function renderHabitBlueprint() {
+    const container = document.getElementById('habitList');
+    if(habitBlueprint.length === 0) { 
+        container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO HABITS SET</p>`; 
+        return; 
+    }
+    container.innerHTML = habitBlueprint.map(habit => `
+        <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary); box-shadow: 0 0 10px rgba(0,0,0,0.5);">
+            <div style="font-weight: 900; font-size: 0.9rem;">${habit.text}</div>
+            <button class="task-del" onclick="removeHabit(${habit.id})">×</button>
+        </div>
+    `).join('');
+}
+
+
+/* --- 🔥 UPGRADED: SMART ROLLOVER WITH HABIT INJECTOR --- */
 function checkRollover() {
     const todayStr = new Date().toISOString().split('T')[0];
     let changed = false;
     
+    // Check past days for incomplete tasks
     Object.keys(dailyData).forEach(dateStr => {
         if (dateStr < todayStr) {
             dailyData[dateStr].forEach(task => {
                 if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
                     
-                    if (!dailyData[todayStr]) { dailyData[todayStr] = []; changed = true; }
+                    if (!dailyData[todayStr]) { 
+                        dailyData[todayStr] = []; changed = true; 
+                        // Inject habits if this triggers the creation of "today"
+                        habitBlueprint.forEach(h => {
+                            dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false });
+                        });
+                    }
                     
+                    // Don't rollover recurring habits (they are auto-injected anyway, keeps list clean)
+                    if (task.text.startsWith("🔄 ")) return;
+
                     if (!dailyData[todayStr].some(t => t.text === task.text)) {
                         let newTask = { 
                             text: task.text, 
@@ -645,6 +708,15 @@ function checkRollover() {
             });
         }
     });
+
+    // If today was completely skipped and never initialized above, initialize it here with habits
+    if (!dailyData[todayStr] && habitBlueprint.length > 0) {
+        dailyData[todayStr] = [];
+        habitBlueprint.forEach(h => {
+            dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false });
+        });
+        changed = true;
+    }
     
     if (changed) { save(); calculateStreak(); }
 }
@@ -667,7 +739,14 @@ function scrollToToday(instant = false) {
 
 function createDay(instant = false) {
     const date = document.getElementById('datePicker').value; if(!date || dailyData[date]) return;
-    dailyData[date] = []; save(); const container = document.getElementById('daily-container');
+    dailyData[date] = []; 
+    
+    // Inject Habits into the new day
+    habitBlueprint.forEach(h => {
+        dailyData[date].push({ text: h.text, priority: 'prio-med', done: false });
+    });
+
+    save(); const container = document.getElementById('daily-container');
     container.innerHTML = ''; Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
     setTimeout(() => { 
         const card = document.getElementById(`card-${date}`);
@@ -681,7 +760,14 @@ function createMonth() {
     const [year, month] = monthVal.split('-'); const daysInMonth = new Date(year, month, 0).getDate(); let changed = false;
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
-        if (!dailyData[dateStr]) { dailyData[dateStr] = []; changed = true; }
+        if (!dailyData[dateStr]) { 
+            dailyData[dateStr] = []; 
+            // Inject Habits into every day of the month
+            habitBlueprint.forEach(h => {
+                dailyData[dateStr].push({ text: h.text, priority: 'prio-med', done: false });
+            });
+            changed = true; 
+        }
     }
     if (changed) {
         save(); const container = document.getElementById('daily-container'); container.innerHTML = ''; 
@@ -959,7 +1045,7 @@ function manualArchive() {
 
     let totalTasks = 0, completedTasks = 0, daysFound = 0;
     let totalSubtasks = 0, completedSubtasks = 0; 
-    let executableTotal = 0, executableCompleted = 0; // True Actions Count
+    let executableTotal = 0, executableCompleted = 0; 
     let prioStats = { high: {tot:0, done:0}, med: {tot:0, done:0}, low: {tot:0, done:0} };
     let dailyPercents = [];
 
@@ -975,19 +1061,18 @@ function manualArchive() {
                 let weightPerTask = 100 / dayTot;
 
                 tasksThisDay.forEach(t => { 
-                    totalTasks++; // For the detailed "MAIN TASKS" box
+                    totalTasks++; 
                     let p = t.priority || 'prio-low';
                     let pKey = p === 'prio-high' ? 'high' : (p === 'prio-med' ? 'med' : 'low');
                     prioStats[pKey].tot++;
                     
                     if (t.done) { completedTasks++; prioStats[pKey].done++; } 
                     
-                    // True Action tracking logic
                     if(t.subtasks && t.subtasks.length > 0) {
                         let doneSubCount = 0;
                         t.subtasks.forEach(st => {
                             totalSubtasks++;
-                            executableTotal++; // Action badha
+                            executableTotal++; 
                             if(st.done) {
                                 completedSubtasks++;
                                 executableCompleted++;
@@ -996,7 +1081,7 @@ function manualArchive() {
                         });
                         dailyPercent += ((doneSubCount / t.subtasks.length) * weightPerTask);
                     } else {
-                        executableTotal++; // Bina subtask wala task khud action hai
+                        executableTotal++; 
                         if(t.done) {
                             executableCompleted++;
                             dailyPercent += weightPerTask;
@@ -1269,7 +1354,7 @@ function renderExams() {
 }
 
 function exportBackup() {
-    const backupData = { vibeProFinal: localStorage.getItem('vibeProFinal'), vibeReports: localStorage.getItem('vibeReports'), vibeExams: localStorage.getItem('vibeExams'), month: localStorage.getItem('month'), year: localStorage.getItem('year'), vibeSettings: localStorage.getItem('vibeSettings'), vibeNavOrder: localStorage.getItem('vibeNavOrder') };
+    const backupData = { vibeProFinal: localStorage.getItem('vibeProFinal'), vibeReports: localStorage.getItem('vibeReports'), vibeExams: localStorage.getItem('vibeExams'), month: localStorage.getItem('month'), year: localStorage.getItem('year'), vibeSettings: localStorage.getItem('vibeSettings'), vibeNavOrder: localStorage.getItem('vibeNavOrder'), vibeHabits: localStorage.getItem('vibeHabits') };
     const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `VIBE_PLANNER_${new Date().toISOString().split('T')[0]}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
@@ -1280,7 +1365,7 @@ function importBackup(event) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder'].forEach(k => { if(data[k]) localStorage.setItem(k, data[k]); });
+            ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'].forEach(k => { if(data[k]) localStorage.setItem(k, data[k]); });
             alert("🔥 Planner Vibe Restored! Reloading...."); location.reload();
         } catch (err) { alert("❌ Invalid backup file!"); }
     }; reader.readAsText(file); event.target.value = '';

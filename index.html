@@ -31,11 +31,11 @@
     <div class="controls-row" id="navControlsRow">
         <div class="streak-badge draggable-nav" id="nav-streak" draggable="true">🔥 <span id="streakCount">0</span></div>
         <button class="action-btn draggable-nav" id="nav-timer" draggable="true" onclick="openModal('pomodoroModal')">⏱️ TIMER</button>
+        <button class="action-btn draggable-nav" id="nav-habits" draggable="true" onclick="openModal('habitsModal')">🔄 HABITS</button>
         <button class="action-btn draggable-nav" id="nav-exams" draggable="true" onclick="openModal('examModal')">🎯 EXAMS</button>
         <button class="action-btn draggable-nav" id="nav-stats" draggable="true" onclick="openModal('statsModal')">📊 STATS</button>
         
         <div class="dropdown-container draggable-nav" id="nav-data-menu" draggable="true">
-            
             <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)" style="font-size: 1.1rem; padding: 4px 10px;">⋮</button>
             <div class="dropdown-menu" id="dataDropdown">
                 <button class="dropdown-item" onclick="exportBackup()">💾 BACKUP DATA</button>
@@ -44,7 +44,6 @@
         </div>
 
         <button class="action-btn accent draggable-nav" id="nav-settings" draggable="true" onclick="openModal('settingsModal')">⚙️ SETTINGS</button>
-   
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="importBackup(event)">
     </div>
 </header>
@@ -75,7 +74,6 @@
             <input type="text" id="in-month" placeholder="NEW GOAL..." onkeydown="if(event.key==='Enter') addGoal('month')">
             <button class="add-btn" onclick="addGoal('month')">ADD</button>
         </div>
-     
         <ul id="list-month"></ul>
     </div>
     <div class="card" style="height: 340px;">
@@ -87,10 +85,22 @@
         <ul id="list-year"></ul>
     </div>
     <div class="card" style="height: 340px;">
-      
         <h2>📈 ARCHIVES</h2>
         <div id="report-list" style="overflow-y: auto; flex-grow: 1; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);"></div>
         <button class="add-btn" onclick="manualArchive()" style="width: 100%; font-size: 0.75rem;">GENERATE PREV MONTH REPORT</button>
+    </div>
+</div>
+
+<div id="habitsModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2>🔄 HABIT BLUEPRINT</h2>
+        <p style="font-size:0.7rem; opacity:0.7; text-align:center; margin-top:-10px; margin-bottom: 20px;">These habits will auto-fill every time a new day is created.</p>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="text" id="habitName" placeholder="HABIT (e.g. WORKOUT)" onkeydown="if(event.key==='Enter') addHabit()">
+            <button class="add-btn" onclick="addHabit()">ADD</button>
+        </div>
+        <ul id="habitList" style="flex-grow: 1; overflow-y: auto; max-height: 300px; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;"></ul>
+        <button class="action-btn" onclick="closeModal('habitsModal')" style="align-self:center; width:100%; margin-top: auto;">CLOSE</button>
     </div>
 </div>
 
