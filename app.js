@@ -625,19 +625,30 @@ function addHabit() {
     document.getElementById('habitName').value = ''; 
     renderHabitBlueprint();
 
-    // Auto-inject to today if today exists
     const todayStr = new Date().toISOString().split('T')[0];
-    if(dailyData[todayStr]) {
-        if(!dailyData[todayStr].some(t => t.text === habitText)) {
-            dailyData[todayStr].push({ text: habitText, priority: 'prio-med', done: false });
-            save();
-            const ul = document.getElementById(`list-${todayStr}`);
-            if(ul) {
-                ul.innerHTML = ''; 
-                dailyData[todayStr].forEach((t, i) => renderTask(todayStr, t, i));
+    let changed = false;
+
+    // 🔥 SMART INJECT: Aaj aur aage aane wale saare pre-planned dino mein habit add karega
+    Object.keys(dailyData).forEach(dateStr => {
+        if (dateStr >= todayStr) {
+            if (!dailyData[dateStr].some(t => t.text === habitText)) {
+                dailyData[dateStr].push({ text: habitText, priority: 'prio-med', done: false });
+                changed = true;
+                
+                // Agar wo din screen par dikh raha hai, toh turant UI update kar do
+                const ul = document.getElementById(`list-${dateStr}`);
+                if(ul) {
+                    ul.innerHTML = ''; 
+                    dailyData[dateStr].forEach((t, i) => renderTask(dateStr, t, i));
+                }
+                updateProgress(dateStr);
             }
-            updateProgress(todayStr); calculateStreak();
         }
+    });
+
+    if (changed) {
+        save();
+        calculateStreak();
     }
 }
 
