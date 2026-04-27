@@ -8,12 +8,13 @@ const firebaseConfig = {
     databaseURL: "https://pro-planner-60e6b-default-rtdb.firebaseio.com/"
 };
 
-if (!firebase.apps.length) {
+const firebaseAvailable = typeof firebase !== 'undefined';
+if (firebaseAvailable && !firebase.apps.length) {
     firebase.initializeApp(firebaseConfig);
 }
-const auth = firebase.auth();
-const db = firebase.database();
-const provider = new firebase.auth.GoogleAuthProvider();
+const auth = firebaseAvailable ? firebase.auth() : null;
+const db = firebaseAvailable ? firebase.database() : null;
+const provider = firebaseAvailable ? new firebase.auth.GoogleAuthProvider() : null;
 let currentUser = null;
 
 function toTitleCase(str) {
@@ -23,7 +24,51 @@ function toTitleCase(str) {
     }).join(' ');
 }
 
-auth.onAuthStateChanged(async (user) => {
+function escapeHTML(value) {
+    return String(value ?? '').replace(/[&<>"']/g, char => ({
+        '&': '&amp;',
+        '<': '&lt;',
+        '>': '&gt;',
+        '"': '&quot;',
+        "'": '&#39;'
+    }[char]));
+}
+
+function runConfetti(options) {
+    if (typeof confetti === 'function') confetti(options);
+}
+
+function dateKeyFromLocal(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function getDailyScore(dateStr) {
+    const tasks = dailyData[dateStr] || [];
+    if (tasks.length === 0) return null;
+
+    let dailyPercent = 0;
+    const weightPerTask = 100 / tasks.length;
+    tasks.forEach(task => {
+        if (task.subtasks && task.subtasks.length > 0) {
+            const doneSubtasks = task.subtasks.filter(st => st.done).length;
+            dailyPercent += (doneSubtasks / task.subtasks.length) * weightPerTask;
+        } else if (task.done) {
+            dailyPercent += weightPerTask;
+        }
+    });
+
+    return Math.round(dailyPercent);
+}
+
+function safeNumber(value, fallback = 0) {
+    const number = Number(value);
+    return Number.isFinite(number) ? number : fallback;
+}
+
+if (auth) auth.onAuthStateChanged(async (user) => {
     const btn = document.getElementById('authBtnModal');
     const status = document.getElementById('syncStatus');
     if (user) {
@@ -55,6 +100,10 @@ auth.onAuthStateChanged(async (user) => {
 });
 
 function toggleAuth() {
+    if (!auth || !provider) {
+        alert("Cloud sync is unavailable offline. Your planner still works locally.");
+        return;
+    }
     if (window.location.protocol === 'file:') {
         alert("⚠️ GOOGLE LOGIN ERROR! ⚠️\n\nGoogle Login 'file://' wale link par kaam nahi karta hai.\nUpload to Netlify/Vercel or use VS Code Live Server.");
         return;
@@ -69,7 +118,7 @@ function toggleAuth() {
 }
 
 async function syncToFirebase() {
-    if (!currentUser) return; 
+    if (!currentUser || !db) return; 
     try {
         const payload = {
             dailyData: JSON.stringify(dailyData),
@@ -85,7 +134,7 @@ async function syncToFirebase() {
 }
 
 async function loadDataFromFirebase() {
-    if (!currentUser) return;
+    if (!currentUser || !db) return;
     try {
         const snapshot = await db.ref('plannerUsers/' + currentUser.uid).once('value');
         if (snapshot.exists()) {
@@ -193,7 +242,7 @@ function init3DTilt(card) {
 
 function checkUpcomingExamNotification() {
     if (!settings.notificationsEnabled || trackedExams.length === 0) return;
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dateKeyFromLocal(new Date());
     const lastNotifDate = localStorage.getItem('vibeExamNotifDate');
     if (lastNotifDate === todayStr) return;
 
@@ -514,7 +563,7 @@ function toggleTimer() {
             timeLeft--; updateTimerDisplay();
             if (timeLeft <= 0) {
                 clearInterval(timerInterval); isRunning = false; btn.innerText = "START";
-                confetti({ particleCount: 150, spread: 80 }); playAlarm();
+                runConfetti({ particleCount: 150, spread: 80 }); playAlarm();
                 let msg = currentMode === 'work' ? settings.workMsg : settings.breakMsg;
                 showNotification("TIMER FINISHED", msg);
                 setTimerMode(currentMode === 'work' ? 'break' : 'work');
@@ -528,37 +577,21 @@ function resetTimer() { setTimerMode(currentMode); }
 function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
 
 function calculateStreak() {
-    const todayStr = new Date().toISOString().split('T')[0];
     let streak = 0;
-    const sortedDates = Object.keys(dailyData).sort();
+    const cursor = new Date();
+    cursor.setHours(0, 0, 0, 0);
 
-    sortedDates.forEach(dateStr => {
-        let tasks = dailyData[dateStr] || []; 
-        let totalTasks = tasks.length;
-        if (dateStr < todayStr || dateStr === todayStr) {
-            if (totalTasks > 0) {
-                let dailyPercent = 0;
-                let weightPerTask = 100 / totalTasks;
-                tasks.forEach(task => {
-                    if (task.subtasks && task.subtasks.length > 0) {
-                        let doneSubtasks = task.subtasks.filter(st => st.done).length;
-                        let subtaskRatio = doneSubtasks / task.subtasks.length;
-                        dailyPercent += (subtaskRatio * weightPerTask);
-                    } else {
-                        if (task.done) dailyPercent += weightPerTask;
-                    }
-                });
-                let finalDayScore = Math.round(dailyPercent);
-                if (dateStr < todayStr) {
-                    if (finalDayScore >= 70) { streak += 1; } else { streak = 0; }
-                } else if (dateStr === todayStr) {
-                    if (finalDayScore >= 70) { streak += 1; }
-                }
-            } else if (dateStr < todayStr) {
-                streak = 0; 
-            }
+    while (true) {
+        const dateStr = dateKeyFromLocal(cursor);
+        const score = getDailyScore(dateStr);
+        if (score !== null && score >= 70) {
+            streak += 1;
+            cursor.setDate(cursor.getDate() - 1);
+        } else {
+            break;
         }
-    });
+    }
+
     const streakElement = document.getElementById('streakCount');
     if(streakElement) streakElement.innerText = streak;
 }
@@ -596,7 +629,7 @@ function addHabit() {
     document.getElementById('habitName').value = ''; 
     renderHabitBlueprint();
 
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dateKeyFromLocal(new Date());
     let changed = false;
 
     Object.keys(dailyData).forEach(dateStr => {
@@ -617,7 +650,7 @@ function addHabit() {
 }
 
 function removeHabit(id) {
-    habitBlueprint = habitBlueprint.filter(h => h.id !== id); 
+    habitBlueprint = habitBlueprint.filter(h => Number(h.id) !== Number(id)); 
     localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
     syncToFirebase(); 
     renderHabitBlueprint();
@@ -629,16 +662,19 @@ function renderHabitBlueprint() {
         container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO HABITS SET</p>`; 
         return; 
     }
-    container.innerHTML = habitBlueprint.map(habit => `
+    container.innerHTML = habitBlueprint.filter(habit => Number.isFinite(Number(habit.id))).map(habit => {
+        const habitId = Number(habit.id);
+        return `
         <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary); box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-            <div style="font-weight: 900; font-size: 0.9rem;">${habit.text}</div>
-            <button class="task-del" onclick="removeHabit(${habit.id})">×</button>
+            <div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(habit.text)}</div>
+            <button class="task-del" onclick="removeHabit(${habitId})">×</button>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function checkRollover() {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dateKeyFromLocal(new Date());
     let changed = false;
     Object.keys(dailyData).forEach(dateStr => {
         if (dateStr < todayStr) {
@@ -691,7 +727,7 @@ function sortTasks(date) {
 }
 
 function scrollToToday(instant = false) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dateKeyFromLocal(new Date());
     if (!dailyData[todayStr]) { 
         document.getElementById('datePicker').value = todayStr; 
         createDay(instant); 
@@ -733,12 +769,12 @@ function createMonth() {
             const card = document.getElementById(`card-${firstDayStr}`);
             if(card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
         }, 100);
-        confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); 
+        runConfetti({ particleCount: 100, spread: 70, origin: { y: 0.6 } }); 
     } else { alert("All days for this month are already in your planner!"); }
 }
 
 function renderDailyCard(date) {
-    const todayStr = new Date().toISOString().split('T')[0]; const isToday = date === todayStr;
+    const todayStr = dateKeyFromLocal(new Date()); const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
     card.innerHTML = `
         <div class="card-header">
@@ -872,7 +908,7 @@ function getDuration(start, end) {
 }
 
 function renderTask(date, task, idx) {
-    const todayStr = new Date().toISOString().split('T')[0];
+    const todayStr = dateKeyFromLocal(new Date());
     const li = document.createElement('li'); 
     
     if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
@@ -897,7 +933,7 @@ function renderTask(date, task, idx) {
                 <li class="${liClass}">
                     <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
                     <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-                        ${st.text}
+                        ${escapeHTML(st.text)}
                     </span>
                     <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
                 </li>
@@ -921,6 +957,7 @@ function renderTask(date, task, idx) {
     }
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
+    const displayText = task.rolledOver ? '❌ Missed: ' + task.text : task.text;
     
     li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
@@ -929,7 +966,7 @@ function renderTask(date, task, idx) {
             ${toggleBtnHTML}
             ${timeBadgeHTML}
             <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-                ${task.rolledOver ? '❌ Missed: ' + task.text : task.text}
+                ${escapeHTML(displayText)}
             </span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
@@ -988,12 +1025,12 @@ function handleCheck(date, idx, checkboxElement) {
         let doneTasks = dailyData[date].filter(t => t.done).length;
 
         if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
-            confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
-            setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
-            setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
+            runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
+            setTimeout(() => runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
+            setTimeout(() => runConfetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
             setTimeout(() => { showCelebrationModal(); }, 800);
         } else if (task.done) {
-            confetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
+            runConfetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
         }
     }
 }
@@ -1023,7 +1060,7 @@ function renderGoal(type, text, done, idx) {
     const li = document.createElement('li');
     li.innerHTML = `
         <div class="custom-checkbox ${done ? 'checked' : ''}" onclick="handleGoalCheck('${type}', ${idx}, this)"></div> 
-        <span class="task-text ${done ? 'done' : ''}" contenteditable="true" onblur="editGoal('${type}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${text}</span>
+        <span class="task-text ${done ? 'done' : ''}" contenteditable="true" onblur="editGoal('${type}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${escapeHTML(text)}</span>
         <button class="task-del" onclick="removeGoal('${type}', ${idx}, this)">×</button>
     `;
     document.getElementById(`list-${type}`).appendChild(li);
@@ -1040,7 +1077,7 @@ function handleGoalCheck(type, idx, checkboxElement) {
     if(g) {
         g.done = !g.done; checkboxElement.classList.toggle('checked', g.done);
         checkboxElement.nextElementSibling.classList.toggle('done', g.done);
-        if(g.done) confetti({ particleCount: 80, spread: 100 }); 
+        if(g.done) runConfetti({ particleCount: 80, spread: 100 }); 
         localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
     }
 }
@@ -1126,50 +1163,59 @@ function manualArchive() {
 
 function removeReport(id) {
     if(!confirm("Delete this archive?")) return;
-    reports = reports.filter(r => r.id !== id); localStorage.setItem('vibeReports', JSON.stringify(reports));
+    reports = reports.filter(r => Number(r.id) !== Number(id)); localStorage.setItem('vibeReports', JSON.stringify(reports));
     syncToFirebase(); renderReports();
 }
 
 function renderReports() {
     const reportArea = document.getElementById('report-list');
     if (reports.length === 0) { reportArea.innerHTML = `<p style="font-size:0.7rem; opacity:0.5; text-align:center; margin-top:30px;">NO ARCHIVES YET</p>`; return; }
-    reportArea.innerHTML = reports.map(r => `
-        <div style="padding: 12px; border-left: 3px solid var(--primary); background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.3)'" onclick="viewReport(${r.id})">
+    reportArea.innerHTML = reports.filter(r => Number.isFinite(Number(r.id))).map(r => {
+        const reportId = Number(r.id);
+        return `
+        <div style="padding: 12px; border-left: 3px solid var(--primary); background: rgba(0,0,0,0.3); margin-bottom: 8px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.1)'" onmouseout="this.style.background='rgba(0,0,0,0.3)'" onclick="viewReport(${reportId})">
             <div>
-                <div style="font-size: 0.8rem; color: var(--primary); font-weight:900;">${r.month}</div>
-                <div style="font-size: 0.9rem;">${r.stats}</div>
-                <div style="font-size: 0.65rem; opacity: 0.7;">${r.details}</div>
+                <div style="font-size: 0.8rem; color: var(--primary); font-weight:900;">${escapeHTML(r.month)}</div>
+                <div style="font-size: 0.9rem;">${escapeHTML(r.stats)}</div>
+                <div style="font-size: 0.65rem; opacity: 0.7;">${escapeHTML(r.details)}</div>
             </div>
-            <button class="task-del" onclick="event.stopPropagation(); removeReport(${r.id})">×</button>
+            <button class="task-del" onclick="event.stopPropagation(); removeReport(${reportId})">×</button>
         </div>
-    `).join('');
+    `;
+    }).join('');
 }
 
 function viewReport(id) {
-    const r = reports.find(rep => rep.id === id); if (!r) return;
+    const r = reports.find(rep => Number(rep.id) === Number(id)); if (!r) return;
     document.getElementById('reportModalTitle').innerText = `📊 ${r.month} REPORT`;
     
-    let avgTasks = r.advanced && r.advanced.avgTasksPerDay ? r.advanced.avgTasksPerDay : "-";
-    let completedActions = r.details.split('/')[0];
-    let totalActions = r.details.split('/')[1].split(' ')[0];
+    const detailsParts = String(r.details || '0/0 ACTIONS').split('/');
+    let avgTasks = r.advanced && r.advanced.avgTasksPerDay ? escapeHTML(r.advanced.avgTasksPerDay) : "-";
+    let completedActions = detailsParts[0] || '0';
+    let totalActions = detailsParts[1] ? detailsParts[1].split(' ')[0] : '0';
     let missedActions = parseInt(totalActions) - parseInt(completedActions);
+    const safeStats = escapeHTML(r.stats);
+    const safeCompletedActions = escapeHTML(completedActions);
+    const safeMissedActions = escapeHTML(Number.isNaN(missedActions) ? 0 : missedActions);
     
     let content = `<div style="display:flex; justify-content:space-between; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 10px; margin-bottom: 20px; border: 1px solid rgba(255,255,255,0.05); flex-wrap:wrap; gap:10px;">
-        <div style="text-align:center; flex:1; min-width:80px;"><div style="font-size:1.6rem; color:var(--primary); font-weight:900;">${r.stats}</div><div style="font-size:0.6rem; opacity:0.7;">EFFICIENCY</div></div>
-        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--done-green); font-weight:900;">${completedActions}</div><div style="font-size:0.6rem; opacity:0.7;">ACTIONS DONE</div></div>
-        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--missed); font-weight:900;">${missedActions}</div><div style="font-size:0.6rem; opacity:0.7;">MISSED</div></div>
+        <div style="text-align:center; flex:1; min-width:80px;"><div style="font-size:1.6rem; color:var(--primary); font-weight:900;">${safeStats}</div><div style="font-size:0.6rem; opacity:0.7;">EFFICIENCY</div></div>
+        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--done-green); font-weight:900;">${safeCompletedActions}</div><div style="font-size:0.6rem; opacity:0.7;">ACTIONS DONE</div></div>
+        <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--missed); font-weight:900;">${safeMissedActions}</div><div style="font-size:0.6rem; opacity:0.7;">MISSED</div></div>
         <div style="text-align:center; flex:1; min-width:80px; border-left: 1px solid rgba(255,255,255,0.1);"><div style="font-size:1.6rem; color:var(--med); font-weight:900;">${avgTasks}</div><div style="font-size:0.6rem; opacity:0.7;">AVG/DAY</div></div>
     </div>`;
 
     if (r.advanced) {
-        let tSub = r.advanced.totalSubtasks || 0;
-        let cSub = r.advanced.completedSubtasks || 0;
+        let tSub = safeNumber(r.advanced.totalSubtasks);
+        let cSub = safeNumber(r.advanced.completedSubtasks);
+        const completedTasks = safeNumber(r.advanced.completedTasks);
+        const totalTasks = safeNumber(r.advanced.totalTasks);
         
         content += `
         <div style="display:flex; gap: 10px; margin-bottom: 20px;">
             <div style="flex:1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
                 <div style="font-size:0.65rem; opacity:0.7; margin-bottom: 5px; letter-spacing: 1px;">MAIN TASKS</div>
-                <div style="font-size:1.2rem; font-weight:900; color:var(--primary);">${r.advanced.completedTasks} <span style="font-size:0.8rem; opacity:0.5;">/ ${r.advanced.totalTasks}</span></div>
+                <div style="font-size:1.2rem; font-weight:900; color:var(--primary);">${completedTasks} <span style="font-size:0.8rem; opacity:0.5;">/ ${totalTasks}</span></div>
             </div>
             <div style="flex:1; background: rgba(255,255,255,0.05); padding: 12px; border-radius: 8px; text-align: center; border: 1px solid rgba(255,255,255,0.1);">
                 <div style="font-size:0.65rem; opacity:0.7; margin-bottom: 5px; letter-spacing: 1px;">SUBTASKS CRUSHED</div>
@@ -1177,7 +1223,12 @@ function viewReport(id) {
             </div>
         </div>`;
 
-        const p = r.advanced.prioStats;
+        const rawP = r.advanced.prioStats || {};
+        const p = {
+            high: { done: safeNumber(rawP.high && rawP.high.done), tot: safeNumber(rawP.high && rawP.high.tot) },
+            med: { done: safeNumber(rawP.med && rawP.med.done), tot: safeNumber(rawP.med && rawP.med.tot) },
+            low: { done: safeNumber(rawP.low && rawP.low.done), tot: safeNumber(rawP.low && rawP.low.tot) }
+        };
         const hPerc = p.high.tot ? Math.round((p.high.done/p.high.tot)*100) : 0;
         const mPerc = p.med.tot ? Math.round((p.med.done/p.med.tot)*100) : 0;
         const lPerc = p.low.tot ? Math.round((p.low.done/p.low.tot)*100) : 0;
@@ -1194,8 +1245,8 @@ function viewReport(id) {
             </div>
         </div>`;
 
-        if (r.advanced.dailyPercents && r.advanced.dailyPercents.length > 0) {
-            let dp = r.advanced.dailyPercents;
+        if (Array.isArray(r.advanced.dailyPercents) && r.advanced.dailyPercents.length > 0) {
+            let dp = r.advanced.dailyPercents.map(perc => Math.max(0, Math.min(100, safeNumber(perc))));
             let svgW = 400, svgH = 100;
             let barTotalW = dp.length > 0 ? svgW / dp.length : 0;
             let barW = barTotalW * 0.75; 
@@ -1236,7 +1287,7 @@ function renderStats() {
     const content = document.getElementById('statsContent'); content.innerHTML = '';
     let chartData = []; let labels = []; let rowsHTML = '';
     for(let i=6; i>=0; i--) {
-        let d = new Date(); d.setDate(d.getDate() - i); let dStr = d.toISOString().split('T')[0];
+        let d = new Date(); d.setDate(d.getDate() - i); let dStr = dateKeyFromLocal(d);
         let tasks = dailyData[dStr] || []; let total = tasks.length, done = tasks.filter(t => t.done).length;
         let perc = total === 0 ? 0 : Math.round((done/total)*100);
         chartData.push(perc); labels.push(new Date(dStr).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
@@ -1291,7 +1342,7 @@ function addExam() {
 }
 
 function removeExam(id) {
-    trackedExams = trackedExams.filter(e => e.id !== id); 
+    trackedExams = trackedExams.filter(e => Number(e.id) !== Number(id)); 
     localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
     syncToFirebase(); 
     renderExams();
@@ -1311,6 +1362,8 @@ function renderExams() {
     let aced = [];
 
     trackedExams.forEach(exam => {
+        if (!Number.isFinite(Number(exam.id))) return;
+        exam.id = Number(exam.id);
         const [year, month, day] = exam.date.split('-');
         const examDate = new Date(year, month - 1, day);
         const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
@@ -1340,8 +1393,8 @@ function renderExams() {
                 ${aced.map(exam => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
                     <div>
-                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${exam.name}</div>
-                        <div style="font-size: 0.65rem; opacity: 0.6;">${exam.examDateStr}</div>
+                        <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${escapeHTML(exam.name)}</div>
+                        <div style="font-size: 0.65rem; opacity: 0.6;">${escapeHTML(exam.examDateStr)}</div>
                     </div>
                     <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
                 </div>`).join('')}
@@ -1358,7 +1411,7 @@ function renderExams() {
 
             return `
             <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-                <div><div style="font-weight: 900; font-size: 0.9rem;">${exam.name}</div><div style="font-size: 0.7rem; opacity: 0.7;">${exam.examDateStr}</div></div>
+                <div><div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(exam.name)}</div><div style="font-size: 0.7rem; opacity: 0.7;">${escapeHTML(exam.examDateStr)}</div></div>
                 <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
             </div>`;
         }).join('');
@@ -1372,7 +1425,7 @@ function renderExams() {
 function exportBackup() {
     const backupData = { vibeProFinal: localStorage.getItem('vibeProFinal'), vibeReports: localStorage.getItem('vibeReports'), vibeExams: localStorage.getItem('vibeExams'), month: localStorage.getItem('month'), year: localStorage.getItem('year'), vibeSettings: localStorage.getItem('vibeSettings'), vibeNavOrder: localStorage.getItem('vibeNavOrder'), vibeHabits: localStorage.getItem('vibeHabits') };
     const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `VIBE_PLANNER_${new Date().toISOString().split('T')[0]}.json`;
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `VIBE_PLANNER_${dateKeyFromLocal(new Date())}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -1390,7 +1443,7 @@ function importBackup(event) {
 document.addEventListener('keydown', function(event) {
     if (event.ctrlKey && event.key.toLowerCase() === 'n') {
         event.preventDefault(); scrollToToday();
-        const todayStr = new Date().toISOString().split('T')[0];
+        const todayStr = dateKeyFromLocal(new Date());
         const inp = document.getElementById(`in-${todayStr}`); if (inp) inp.focus();
     }
     if (event.key === 'Escape') { document.querySelectorAll('.modal-overlay').forEach(m => { if(m.classList.contains('show')) closeModal(m.id); }); }
@@ -1445,15 +1498,15 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
     let doneTasks = dailyData[date].filter(t => t.done).length;
 
     if (st.done && allDone && totalTasks > 0 && doneTasks === totalTasks) {
-        confetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
-        setTimeout(() => confetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
-        setTimeout(() => confetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
+        runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
+        setTimeout(() => runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
+        setTimeout(() => runConfetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
         
         setTimeout(() => {
             showCelebrationModal();
         }, 800);
     } else if (st.done) {
-        confetti({ particleCount: 20, spread: 40 });
+        runConfetti({ particleCount: 20, spread: 40 });
     }
 }
 

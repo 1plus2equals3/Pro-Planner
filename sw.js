@@ -1,9 +1,14 @@
-const CACHE_NAME = 'pro-planner-v3'; // Future mein update ke liye v3, v4 kar dena
+const CACHE_NAME = 'pro-planner-v4';
 const ASSETS = [
   './',
   './index.html',
+  './index.html?app=new',
+  './style.css',
+  './app.js',
   './manifest.json',
-  './icon.png'
+  './icon.png',
+  './icon-192.png',
+  './icon-512.png'
 ];
 
 // 1. Install Event: Saari files ko cache mein daalo
@@ -35,9 +40,19 @@ self.addEventListener('activate', (e) => {
 
 // 3. Fetch Event: Offline support ke liye
 self.addEventListener('fetch', (e) => {
+  if (e.request.method !== 'GET') return;
+
   e.respondWith(
     caches.match(e.request).then((response) => {
-      return response || fetch(e.request);
+      if (response) return response;
+
+      return fetch(e.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.ok) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
+        }
+        return networkResponse;
+      });
     })
   );
 });
