@@ -722,6 +722,7 @@ function sortTasks(date) {
     }
 }
 
+/* --- BUG FIX: Instant Jump Without Scroll Animation --- */
 function scrollToToday(instant = false) {
     const todayStr = dateKeyFromLocal(new Date());
     if (!dailyData[todayStr]) { 
@@ -729,7 +730,14 @@ function scrollToToday(instant = false) {
         createDay(instant); 
     } else {
         const card = document.getElementById(`card-${todayStr}`);
-        if (card) card.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'nearest', inline: 'center' });
+        if (card) {
+            if (instant) {
+                const container = document.getElementById('daily-container');
+                container.scrollLeft = card.offsetLeft - (container.clientWidth / 2) + (card.clientWidth / 2);
+            } else {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            }
+        }
     }
 }
 
@@ -741,8 +749,14 @@ function createDay(instant = false) {
     container.innerHTML = ''; Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
     setTimeout(() => { 
         const card = document.getElementById(`card-${date}`);
-        if(card) card.scrollIntoView({ behavior: instant ? 'auto' : 'smooth', block: 'nearest', inline: 'center' }); 
-    }, 100);
+        if(card) {
+            if (instant) {
+                container.scrollLeft = card.offsetLeft - (container.clientWidth / 2) + (card.clientWidth / 2);
+            } else {
+                card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' }); 
+            }
+        }
+    }, 50);
 }
 
 function createMonth() {
@@ -927,11 +941,11 @@ function renderTask(date, task, idx) {
 
             subtasksHTML += `
                 <li class="${liClass}" data-sub-index="${sIdx}">
-                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx}, this)"></div>
+                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx}, this)"></div>
                     <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
                         ${escapeHTML(st.text)}
                     </span>
-                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
+                    <button class="task-del" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
                 </li>
             `;
         });
@@ -970,7 +984,7 @@ function renderTask(date, task, idx) {
         ${subtasksHTML}
         <div class="subtask-input-container" id="st-in-cont-${date}-${idx}">
             <input type="text" class="subtask-input" id="st-in-${date}-${idx}" placeholder="NEW SUBTASK..." onkeydown="if(event.key==='Enter') addSubtask('${date}', ${idx})">
-            <button class="add-btn" style="padding: 4px 10px; font-size: 0.65rem;" onclick="addSubtask('${date}', ${idx})">+</button>
+            <button class="add-btn" onclick="addSubtask('${date}', ${idx})">+</button>
         </div>
     `;
     document.getElementById(`list-${date}`).appendChild(li);
@@ -980,7 +994,6 @@ function editTask(date, idx, element) {
     let newText = toTitleCase(element.innerText.replace('❌ Missed: ', '').replace('❌ MISSED: ', '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
     dailyData[date][idx].text = newText; save(); 
-    // Optimization: Don't re-render list, just save.
 }
 
 function cyclePriority(dot, date, idx) {
@@ -1008,23 +1021,20 @@ function showCelebrationModal() {
     openModal('celebModal');
 }
 
-/* --- 🔥 STRIKE 1 FIX: High-Performance DOM Updates for Checkboxes --- */
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
     if(!task) return;
     
-    // Data Update
     task.done = !task.done; 
     if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
     save(); 
     
-    // DOM Update (No full re-render!)
     checkboxElement.classList.toggle('checked', task.done);
     let taskTextSpan = checkboxElement.parentElement.querySelector('.task-text');
     if(taskTextSpan) taskTextSpan.classList.toggle('done', task.done);
 
     let li = checkboxElement.closest('li[data-index]');
-    if (task.subtasks) {
+    if (task.subtasks && li) {
         let subCheckboxes = li.querySelectorAll('.subtask-item .custom-checkbox');
         let subTexts = li.querySelectorAll('.subtask-item .subtask-text');
         subCheckboxes.forEach(cb => cb.classList.toggle('checked', task.done));
@@ -1057,7 +1067,10 @@ function removeDay(date) {
     }
 }
 
-function scrollTimeline(amount) { document.getElementById('daily-container').scrollBy({ left: amount, behavior: 'smooth' }); }
+function scrollTimeline(amount) { 
+    const container = document.getElementById('daily-container');
+    container.scrollBy({ left: amount, behavior: 'smooth' }); 
+}
 
 function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
@@ -1495,7 +1508,6 @@ function addSubtask(date, idx) {
     updateProgress(date); calculateStreak();
 }
 
-/* --- 🔥 STRIKE 1 FIX: High-Performance DOM Updates for Subtasks --- */
 function handleSubtaskCheck(date, tIdx, sIdx, checkboxElement) {
     let task = dailyData[date][tIdx];
     let st = task.subtasks[sIdx];
