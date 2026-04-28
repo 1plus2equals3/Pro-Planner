@@ -68,6 +68,30 @@ function safeNumber(value, fallback = 0) {
     return Number.isFinite(number) ? number : fallback;
 }
 
+function safeReadJSON(key, fallback) {
+    try {
+        const raw = localStorage.getItem(key);
+        if (!raw) return fallback;
+        const parsed = JSON.parse(raw);
+        return parsed ?? fallback;
+    } catch (error) {
+        console.warn(`Ignoring corrupted localStorage key: ${key}`, error);
+        return fallback;
+    }
+}
+
+function safeArray(value) {
+    return Array.isArray(value) ? value : [];
+}
+
+function safeObject(value) {
+    return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function getGoals(type) {
+    return safeArray(safeReadJSON(type, []));
+}
+
 if (auth) auth.onAuthStateChanged(async (user) => {
     const btn = document.getElementById('authBtnModal');
     const status = document.getElementById('syncStatus');
@@ -151,29 +175,43 @@ async function loadDataFromFirebase() {
             if(data.monthGoals) localStorage.setItem('month', data.monthGoals);
             if(data.yearGoals) localStorage.setItem('year', data.yearGoals);
             
-            if (needsReload) location.reload();
+            hydratePlannerState();
+            if (needsReload && appHasRendered) renderApp(true);
         }
     } catch (e) { console.error("Error loading data:", e); }
 }
 
-let dailyData = JSON.parse(localStorage.getItem('vibeProFinal')) || {};
-let reports = JSON.parse(localStorage.getItem('vibeReports')) || [];
-let trackedExams = JSON.parse(localStorage.getItem('vibeExams')) || [];
-let habitBlueprint = JSON.parse(localStorage.getItem('vibeHabits')) || [];
+let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
+let reports = safeArray(safeReadJSON('vibeReports', []));
+let trackedExams = safeArray(safeReadJSON('vibeExams', []));
+let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
 
-let parsedSettings = JSON.parse(localStorage.getItem('vibeSettings')) || {};
-let settings = {
-    theme: parsedSettings.theme || '#a29bfe',
-    dim: parsedSettings.dim !== undefined ? parsedSettings.dim : 0.6,
-    workTime: parsedSettings.workTime || 25,
-    breakTime: parsedSettings.breakTime || 5,
-    soundEnabled: parsedSettings.soundEnabled !== undefined ? parsedSettings.soundEnabled : true,
-    soundType: parsedSettings.soundType || 'classic',
-    notificationsEnabled: parsedSettings.notificationsEnabled || false,
-    workMsg: parsedSettings.workMsg || "TIME FOR A BREAK! ☕",
-    breakMsg: parsedSettings.breakMsg || "BACK TO WORK! 🚀",
-    hundredPercentMsg: parsedSettings.hundredPercentMsg || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues."
-};
+let parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
+let settings = buildSettings(parsedSettings);
+
+function buildSettings(source = {}) {
+    return {
+        theme: source.theme || '#a29bfe',
+        dim: source.dim !== undefined ? source.dim : 0.6,
+        workTime: source.workTime || 25,
+        breakTime: source.breakTime || 5,
+        soundEnabled: source.soundEnabled !== undefined ? source.soundEnabled : true,
+        soundType: source.soundType || 'classic',
+        notificationsEnabled: source.notificationsEnabled || false,
+        workMsg: source.workMsg || "TIME FOR A BREAK! â˜•",
+        breakMsg: source.breakMsg || "BACK TO WORK! ðŸš€",
+        hundredPercentMsg: source.hundredPercentMsg || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues."
+    };
+}
+
+function hydratePlannerState() {
+    dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
+    reports = safeArray(safeReadJSON('vibeReports', []));
+    trackedExams = safeArray(safeReadJSON('vibeExams', []));
+    habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
+    parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
+    settings = buildSettings(parsedSettings);
+}
 
 const motivationalQuotes = [
     "DISCIPLINE EQUALS FREEDOM",
@@ -187,7 +225,10 @@ const motivationalQuotes = [
     "MAKE TODAY YOUR MASTERPIECE"
 ];
 
-window.onload = () => {
+let appHasRendered = false;
+
+function renderApp(fromSync = false) {
+    hydratePlannerState();
     setRandomQuote();
     applySettings();
     checkRollover(); 
@@ -196,22 +237,28 @@ window.onload = () => {
     renderHabitBlueprint();
     initNavDragDrop();
     
+    const dailyContainer = document.getElementById('daily-container');
+    if (dailyContainer) dailyContainer.innerHTML = '';
     const sortedDates = Object.keys(dailyData).sort();
     sortedDates.forEach(d => renderDailyCard(d));
     
     ['month', 'year'].forEach(t => {
-        const saved = JSON.parse(localStorage.getItem(t)) || [];
-        saved.forEach((g, idx) => renderGoal(t, g.text, g.done, idx));
+        const list = document.getElementById(`list-${t}`);
+        if (list) list.innerHTML = '';
+        getGoals(t).forEach((g, idx) => renderGoal(t, g.text, g.done, idx));
     });
 
     scrollToToday(true); 
     initBackground();
-    setTimeout(checkUpcomingExamNotification, 2000);
+    if (!fromSync) setTimeout(checkUpcomingExamNotification, 2000);
 
     document.querySelectorAll('.bottom-goals .card').forEach(card => {
         init3DTilt(card);
     });
-};
+    appHasRendered = true;
+}
+
+window.onload = () => renderApp();
 
 function setRandomQuote() {
     const quote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
@@ -219,6 +266,8 @@ function setRandomQuote() {
 }
 
 function init3DTilt(card) {
+    if (!card || card.dataset.tiltReady === 'true') return;
+    card.dataset.tiltReady = 'true';
     card.addEventListener('mousemove', (e) => {
         const rect = card.getBoundingClientRect();
         const x = e.clientX - rect.left;
@@ -288,8 +337,11 @@ function handleNavDrop(e) {
 }
 
 function initNavDragDrop() {
-    const savedOrder = JSON.parse(localStorage.getItem('vibeNavOrder'));
+    const savedOrder = safeArray(safeReadJSON('vibeNavOrder', []));
     const container = document.getElementById('navControlsRow');
+    if (!container) return;
+    if (container.dataset.navReady === 'true') return;
+    container.dataset.navReady = 'true';
     if (savedOrder) {
         savedOrder.forEach(id => {
             const el = document.getElementById(id);
@@ -404,6 +456,7 @@ function setCustomReminder() {
 
 function openModal(id) {
     const modal = document.getElementById(id);
+    if (!modal) return;
     modal.style.display = 'flex'; void modal.offsetWidth; modal.classList.add('show');
     if(id === 'statsModal') renderStats();
     if(id === 'examModal') renderExams();
@@ -412,6 +465,7 @@ function openModal(id) {
 
 function closeModal(id) {
     const modal = document.getElementById(id);
+    if (!modal) return;
     modal.classList.remove('show'); setTimeout(() => modal.style.display = 'none', 300);
 }
 
@@ -658,6 +712,7 @@ function removeHabit(id) {
 
 function renderHabitBlueprint() {
     const container = document.getElementById('habitList');
+    if (!container) return;
     if(habitBlueprint.length === 0) { 
         container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO HABITS SET</p>`; 
         return; 
@@ -1072,7 +1127,7 @@ function scrollTimeline(amount) { document.getElementById('daily-container').scr
 
 function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
-    const saved = JSON.parse(localStorage.getItem(type)) || [];
+    const saved = getGoals(type);
     saved.push({text: toTitleCase(inp.value.trim()), done: false}); localStorage.setItem(type, JSON.stringify(saved));
     syncToFirebase();
     renderGoal(type, toTitleCase(inp.value.trim()), false, saved.length - 1); inp.value = "";
@@ -1089,13 +1144,13 @@ function renderGoal(type, text, done, idx) {
 }
 
 function editGoal(type, idx, element) {
-    let saved = JSON.parse(localStorage.getItem(type)); let text = element.innerText.trim();
+    let saved = getGoals(type); let text = element.innerText.trim();
     if (text === "") { element.innerText = saved[idx].text; return; }
     saved[idx].text = toTitleCase(text); localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
 }
 
 function handleGoalCheck(type, idx, checkboxElement) {
-    let saved = JSON.parse(localStorage.getItem(type)), g = saved[idx];
+    let saved = getGoals(type), g = saved[idx];
     if(g) {
         g.done = !g.done; checkboxElement.classList.toggle('checked', g.done);
         checkboxElement.nextElementSibling.classList.toggle('done', g.done);
@@ -1105,7 +1160,7 @@ function handleGoalCheck(type, idx, checkboxElement) {
 }
 
 function removeGoal(type, idx) { 
-    let saved = JSON.parse(localStorage.getItem(type)); saved.splice(idx, 1);
+    let saved = getGoals(type); saved.splice(idx, 1);
     localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
     const ul = document.getElementById(`list-${type}`); ul.innerHTML = '';
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
@@ -1456,8 +1511,8 @@ function importBackup(event) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'].forEach(k => { if(data[k]) localStorage.setItem(k, data[k]); });
-            alert("🔥 Planner Vibe Restored! Reloading...."); location.reload();
+            ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'].forEach(k => { if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, data[k] || ''); });
+            hydratePlannerState(); renderApp(true); alert('Planner data restored.');
         } catch (err) { alert("❌ Invalid backup file!"); }
     }; reader.readAsText(file); event.target.value = '';
 }

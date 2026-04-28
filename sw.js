@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pro-planner-v4';
+const CACHE_NAME = 'pro-planner-v5';
 const ASSETS = [
   './',
   './index.html',
