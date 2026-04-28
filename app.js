@@ -437,8 +437,8 @@ function applySettings() {
     document.getElementById('notifToggle').checked = settings.notificationsEnabled;
     document.getElementById('notifToggleCheck').classList.toggle('checked', settings.notificationsEnabled);
 
-    document.getElementById('workMsgInput').value = settings.workMsg || "Time For A Break! ☕";
-    document.getElementById('breakMsgInput').value = settings.breakMsg || "Back To Work! 🚀";
+    document.getElementById('workMsgInput').value = settings.workMsg || "TIME FOR A BREAK! ☕";
+    document.getElementById('breakMsgInput').value = settings.breakMsg || "BACK TO WORK! 🚀";
     
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) hInput.value = settings.hundredPercentMsg;
@@ -475,8 +475,8 @@ function saveSettings() {
     settings.soundEnabled = document.getElementById('soundToggle').checked;
     settings.soundType = document.getElementById('soundTypeSelect').value;
     settings.notificationsEnabled = document.getElementById('notifToggle').checked;
-    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "Time For A Break! ☕";
-    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "Back To Work! 🚀";
+    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "TIME FOR A BREAK! ☕";
+    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "BACK TO WORK! 🚀";
 
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
@@ -773,6 +773,97 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
+/* --- THE NEW SURGICAL DOM CREATION LOGIC 🚀 --- */
+function createTaskElement(date, task, idx) {
+    const todayStr = dateKeyFromLocal(new Date());
+    const li = document.createElement('li'); 
+    
+    if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
+    
+    li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
+    li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
+    li.addEventListener('dragleave', handleDragLeaveDay); li.addEventListener('drop', handleDropDay); li.addEventListener('dragend', handleDragEndDay);
+    
+    let subtasksHTML = '';
+    let hasSubtasks = task.subtasks && task.subtasks.length > 0;
+    let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
+    
+    if(hasSubtasks) {
+        subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
+        task.subtasks.forEach((st, sIdx) => {
+            let stClass = "";
+            if (st.done) stClass = "done";
+            let liClass = "subtask-item";
+            if (date < todayStr && !st.done) liClass += " missed-task";
+
+            subtasksHTML += `
+                <li class="${liClass}">
+                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
+                    <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+                        ${escapeHTML(st.text)}
+                    </span>
+                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
+                </li>
+            `;
+        });
+        subtasksHTML += '</ul>';
+    }
+
+    let timeBadgeHTML = '';
+    if (task.startTime) {
+        let duration = getDuration(task.startTime, task.endTime);
+        let timeStr = formatTime12h(task.startTime);
+        if (task.endTime) timeStr += ` - ${formatTime12h(task.endTime)}`;
+        let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
+        
+        timeBadgeHTML = `
+            <div class="task-clock-icon" title="${tooltipText}">
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </div>
+        `;
+    }
+
+    li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
+    const displayText = task.rolledOver ? '❌ Missed: ' + task.text : task.text;
+    
+    li.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
+            <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
+            <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
+            ${toggleBtnHTML}
+            ${timeBadgeHTML}
+            <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
+                ${escapeHTML(displayText)}
+            </span>
+            <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
+            <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
+        </div>
+        ${subtasksHTML}
+        <div class="subtask-input-container" id="st-in-cont-${date}-${idx}">
+            <input type="text" class="subtask-input" id="st-in-${date}-${idx}" placeholder="NEW SUBTASK..." onkeydown="if(event.key==='Enter') addSubtask('${date}', ${idx})">
+            <button class="add-btn" style="padding: 4px 10px; font-size: 0.65rem;" onclick="addSubtask('${date}', ${idx})">+</button>
+        </div>
+    `;
+    return li;
+}
+
+function renderTask(date, task, idx) {
+    const li = createTaskElement(date, task, idx);
+    const ul = document.getElementById(`list-${date}`);
+    if (ul) ul.appendChild(li);
+}
+
+function updateTaskElement(date, idx) {
+    const ul = document.getElementById(`list-${date}`);
+    if (!ul) return;
+    const oldLi = ul.querySelector(`li[data-index="${idx}"]`);
+    if (oldLi) {
+        const newLi = createTaskElement(date, dailyData[date][idx], idx);
+        ul.replaceChild(newLi, oldLi);
+    }
+}
+/* ---------------------------------------------------- */
+
 function renderDailyCard(date) {
     const todayStr = dateKeyFromLocal(new Date()); const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
@@ -907,90 +998,20 @@ function getDuration(start, end) {
     return res.join(' ');
 }
 
-function renderTask(date, task, idx) {
-    const todayStr = dateKeyFromLocal(new Date());
-    const li = document.createElement('li'); 
-    
-    if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
-    
-    li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
-    li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
-    li.addEventListener('dragleave', handleDragLeaveDay); li.addEventListener('drop', handleDropDay); li.addEventListener('dragend', handleDragEndDay);
-    
-    let subtasksHTML = '';
-    let hasSubtasks = task.subtasks && task.subtasks.length > 0;
-    let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
-    
-    if(hasSubtasks) {
-        subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
-        task.subtasks.forEach((st, sIdx) => {
-            let stClass = "";
-            if (st.done) stClass = "done";
-            let liClass = "subtask-item";
-            if (date < todayStr && !st.done) liClass += " missed-task";
-
-            subtasksHTML += `
-                <li class="${liClass}">
-                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
-                    <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-                        ${escapeHTML(st.text)}
-                    </span>
-                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
-                </li>
-            `;
-        });
-        subtasksHTML += '</ul>';
-    }
-
-    let timeBadgeHTML = '';
-    if (task.startTime) {
-        let duration = getDuration(task.startTime, task.endTime);
-        let timeStr = formatTime12h(task.startTime);
-        if (task.endTime) timeStr += ` - ${formatTime12h(task.endTime)}`;
-        let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
-        
-        timeBadgeHTML = `
-            <div class="task-clock-icon" title="${tooltipText}">
-                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-            </div>
-        `;
-    }
-
-    li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
-    const displayText = task.rolledOver ? '❌ Missed: ' + task.text : task.text;
-    
-    li.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
-            <div class="prio-dot ${task.priority || 'prio-low'}" onclick="cyclePriority(this, '${date}', ${idx})" title="Click to change priority"></div>
-            <div class="custom-checkbox ${task.done ? 'checked' : ''}" onclick="handleCheck('${date}', ${idx}, this)"></div> 
-            ${toggleBtnHTML}
-            ${timeBadgeHTML}
-            <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
-                ${escapeHTML(displayText)}
-            </span>
-            <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
-            <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
-        </div>
-        ${subtasksHTML}
-        <div class="subtask-input-container" id="st-in-cont-${date}-${idx}">
-            <input type="text" class="subtask-input" id="st-in-${date}-${idx}" placeholder="NEW SUBTASK..." onkeydown="if(event.key==='Enter') addSubtask('${date}', ${idx})">
-            <button class="add-btn" style="padding: 4px 10px; font-size: 0.65rem;" onclick="addSubtask('${date}', ${idx})">+</button>
-        </div>
-    `;
-    document.getElementById(`list-${date}`).appendChild(li);
-}
 
 function editTask(date, idx, element) {
     let newText = toTitleCase(element.innerText.replace('❌ Missed: ', '').replace('❌ MISSED: ', '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
-    dailyData[date][idx].text = newText; save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
-    dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    dailyData[date][idx].text = newText; save(); 
+    updateTaskElement(date, idx); // 🚀 Surgical update
 }
 
 function cyclePriority(dot, date, idx) {
     let task = dailyData[date][idx]; const priorities = ['prio-high', 'prio-med', 'prio-low'];
     let currentIdx = priorities.indexOf(task.priority || 'prio-low'); task.priority = priorities[(currentIdx + 1) % priorities.length];
-    sortTasks(date); save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    sortTasks(date); save(); 
+    // Priority changes the order, so full re-render is necessary here
+    const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
 }
 
 function showCelebrationModal() {
@@ -1018,7 +1039,8 @@ function handleCheck(date, idx, checkboxElement) {
         task.done = !task.done; 
         if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
         save(); 
-        const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+        
+        updateTaskElement(date, idx); // 🚀 Surgical update
         updateProgress(date); calculateStreak();
 
         let totalTasks = dailyData[date].length;
@@ -1461,8 +1483,7 @@ function toggleSubtaskList(date, idx) {
     let task = dailyData[date][idx];
     task.stCollapsed = !task.stCollapsed;
     save();
-    const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
-    dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    updateTaskElement(date, idx); // 🚀 Surgical update
 }
 
 function toggleSubtaskInput(date, idx) {
@@ -1480,7 +1501,8 @@ function addSubtask(date, idx) {
     dailyData[date][idx].done = false; 
     dailyData[date][idx].stCollapsed = false; 
     
-    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    save(); 
+    updateTaskElement(date, idx); // 🚀 Surgical update
     updateProgress(date); calculateStreak();
 }
 
@@ -1491,7 +1513,8 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
     let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
     dailyData[date][tIdx].done = allDone; 
     
-    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    save(); 
+    updateTaskElement(date, tIdx); // 🚀 Surgical update
     updateProgress(date); calculateStreak();
 
     let totalTasks = dailyData[date].length;
@@ -1514,6 +1537,7 @@ function editSubtask(date, tIdx, sIdx, element) {
     let text = toTitleCase(element.innerText.trim());
     if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
     dailyData[date][tIdx].subtasks[sIdx].text = text; save();
+    updateTaskElement(date, tIdx); // 🚀 Surgical update
 }
 
 function removeSubtask(date, tIdx, sIdx) {
@@ -1522,6 +1546,7 @@ function removeSubtask(date, tIdx, sIdx) {
         let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
         dailyData[date][tIdx].done = allDone;
     }
-    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    save(); 
+    updateTaskElement(date, tIdx); // 🚀 Surgical update
     updateProgress(date); calculateStreak();
 }
