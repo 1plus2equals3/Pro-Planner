@@ -229,14 +229,10 @@ function init3DTilt(card) {
         const centerY = rect.height / 2;
         const rotateX = ((y - centerY) / centerY) * -5;
         const rotateY = ((x - centerX) / centerX) * 5;
-        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-10px)`;
-        card.style.boxShadow = `0 25px 50px rgba(0,0,0,0.8), 0 0 40px var(--primary)`;
-        card.style.borderColor = `var(--primary)`;
+        card.style.transform = `perspective(1000px) rotateX(${rotateX}deg) rotateY(${rotateY}deg) translateY(-5px)`;
     });
     card.addEventListener('mouseleave', () => {
         card.style.transform = ``;
-        card.style.boxShadow = ``;
-        card.style.borderColor = ``;
     });
 }
 
@@ -270,11 +266,11 @@ function checkUpcomingExamNotification() {
 
 let draggedNav = null;
 function handleNavDragStart(e) { draggedNav = this; e.dataTransfer.effectAllowed = 'move'; this.style.opacity = '0.5'; }
-function handleNavDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; this.style.boxShadow = '0 0 15px var(--primary)'; return false; }
-function handleNavDragLeave(e) { this.style.boxShadow = ''; }
-function handleNavDragEnd(e) { this.style.opacity = '1'; document.querySelectorAll('.draggable-nav').forEach(el => el.style.boxShadow = ''); }
+function handleNavDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+function handleNavDragLeave(e) { }
+function handleNavDragEnd(e) { this.style.opacity = '1'; }
 function handleNavDrop(e) {
-    e.stopPropagation(); this.style.boxShadow = '';
+    e.stopPropagation();
     if (draggedNav !== this) {
         const container = document.getElementById('navControlsRow');
         const allItems = [...container.querySelectorAll('.draggable-nav')];
@@ -412,7 +408,7 @@ function openModal(id) {
 
 function closeModal(id) {
     const modal = document.getElementById(id);
-    modal.classList.remove('show'); setTimeout(() => modal.style.display = 'none', 300);
+    modal.classList.remove('show'); setTimeout(() => modal.style.display = 'none', 200);
 }
 
 function toggleSettingsCheck(inputId) {
@@ -930,8 +926,8 @@ function renderTask(date, task, idx) {
             if (date < todayStr && !st.done) liClass += " missed-task";
 
             subtasksHTML += `
-                <li class="${liClass}">
-                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx})"></div>
+                <li class="${liClass}" data-sub-index="${sIdx}">
+                    <div class="custom-checkbox ${st.done ? 'checked' : ''}" style="width: 14px; height: 14px; border-width: 1px;" onclick="handleSubtaskCheck('${date}', ${idx}, ${sIdx}, this)"></div>
                     <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
                         ${escapeHTML(st.text)}
                     </span>
@@ -983,8 +979,8 @@ function renderTask(date, task, idx) {
 function editTask(date, idx, element) {
     let newText = toTitleCase(element.innerText.replace('❌ Missed: ', '').replace('❌ MISSED: ', '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
-    dailyData[date][idx].text = newText; save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
-    dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    dailyData[date][idx].text = newText; save(); 
+    // Optimization: Don't re-render list, just save.
 }
 
 function cyclePriority(dot, date, idx) {
@@ -1012,26 +1008,41 @@ function showCelebrationModal() {
     openModal('celebModal');
 }
 
+/* --- 🔥 STRIKE 1 FIX: High-Performance DOM Updates for Checkboxes --- */
 function handleCheck(date, idx, checkboxElement) {
     let task = dailyData[date][idx];
-    if(task) {
-        task.done = !task.done; 
-        if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
-        save(); 
-        const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
-        updateProgress(date); calculateStreak();
+    if(!task) return;
+    
+    // Data Update
+    task.done = !task.done; 
+    if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
+    save(); 
+    
+    // DOM Update (No full re-render!)
+    checkboxElement.classList.toggle('checked', task.done);
+    let taskTextSpan = checkboxElement.parentElement.querySelector('.task-text');
+    if(taskTextSpan) taskTextSpan.classList.toggle('done', task.done);
 
-        let totalTasks = dailyData[date].length;
-        let doneTasks = dailyData[date].filter(t => t.done).length;
+    let li = checkboxElement.closest('li[data-index]');
+    if (task.subtasks) {
+        let subCheckboxes = li.querySelectorAll('.subtask-item .custom-checkbox');
+        let subTexts = li.querySelectorAll('.subtask-item .subtask-text');
+        subCheckboxes.forEach(cb => cb.classList.toggle('checked', task.done));
+        subTexts.forEach(st => st.classList.toggle('done', task.done));
+    }
 
-        if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
-            runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
-            setTimeout(() => runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
-            setTimeout(() => runConfetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
-            setTimeout(() => { showCelebrationModal(); }, 800);
-        } else if (task.done) {
-            runConfetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
-        }
+    updateProgress(date); calculateStreak();
+
+    let totalTasks = dailyData[date].length;
+    let doneTasks = dailyData[date].filter(t => t.done).length;
+
+    if (task.done && totalTasks > 0 && doneTasks === totalTasks) {
+        runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
+        setTimeout(() => runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
+        setTimeout(() => runConfetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
+        setTimeout(() => { showCelebrationModal(); }, 800);
+    } else if (task.done) {
+        runConfetti({ particleCount: 40, origin: { y: 0.8 }, colors: [settings.theme, '#00ff88'] });
     }
 }
 
@@ -1484,14 +1495,31 @@ function addSubtask(date, idx) {
     updateProgress(date); calculateStreak();
 }
 
-function handleSubtaskCheck(date, tIdx, sIdx) {
-    let st = dailyData[date][tIdx].subtasks[sIdx];
+/* --- 🔥 STRIKE 1 FIX: High-Performance DOM Updates for Subtasks --- */
+function handleSubtaskCheck(date, tIdx, sIdx, checkboxElement) {
+    let task = dailyData[date][tIdx];
+    let st = task.subtasks[sIdx];
+    if(!st) return;
+    
+    // Update Data
     st.done = !st.done;
+    let allDone = task.subtasks.every(s => s.done);
+    task.done = allDone; 
+    save(); 
     
-    let allDone = dailyData[date][tIdx].subtasks.every(s => s.done);
-    dailyData[date][tIdx].done = allDone; 
-    
-    save(); const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; dailyData[date].forEach((t, i) => renderTask(date, t, i));
+    // DOM Update ONLY (No full re-render!)
+    checkboxElement.classList.toggle('checked', st.done);
+    let stTextSpan = checkboxElement.parentElement.querySelector('.subtask-text');
+    if(stTextSpan) stTextSpan.classList.toggle('done', st.done);
+
+    let parentLi = checkboxElement.closest('li[data-index]');
+    if (parentLi) {
+        let mainCheck = parentLi.querySelector(':scope > div > .custom-checkbox');
+        let mainText = parentLi.querySelector(':scope > div > .task-text');
+        if (mainCheck) mainCheck.classList.toggle('checked', allDone);
+        if (mainText) mainText.classList.toggle('done', allDone);
+    }
+
     updateProgress(date); calculateStreak();
 
     let totalTasks = dailyData[date].length;
@@ -1501,10 +1529,7 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
         runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.2, y: 0.6 }, zIndex: 9999 }); 
         setTimeout(() => runConfetti({ particleCount: 30, spread: 50, origin: { x: 0.8, y: 0.6 }, zIndex: 9999 }), 200); 
         setTimeout(() => runConfetti({ particleCount: 50, spread: 70, origin: { x: 0.5, y: 0.5 }, zIndex: 9999 }), 400); 
-        
-        setTimeout(() => {
-            showCelebrationModal();
-        }, 800);
+        setTimeout(() => { showCelebrationModal(); }, 800);
     } else if (st.done) {
         runConfetti({ particleCount: 20, spread: 40 });
     }
