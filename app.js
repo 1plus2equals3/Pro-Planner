@@ -16,6 +16,8 @@ const auth = firebaseAvailable ? firebase.auth() : null;
 const db = firebaseAvailable ? firebase.database() : null;
 const provider = firebaseAvailable ? new firebase.auth.GoogleAuthProvider() : null;
 let currentUser = null;
+let syncDebounceTimer = null;
+let isApplyingRemoteData = false;
 
 function toTitleCase(str) {
     if (!str) return "";
@@ -142,7 +144,7 @@ function toggleAuth() {
 }
 
 async function syncToFirebase() {
-    if (!currentUser || !db) return; 
+    if (!currentUser || !db || isApplyingRemoteData) return; 
     try {
         const payload = {
             dailyData: JSON.stringify(dailyData),
@@ -151,34 +153,57 @@ async function syncToFirebase() {
             habits: JSON.stringify(habitBlueprint),
             settings: JSON.stringify(settings),
             monthGoals: localStorage.getItem('month') || '[]',
-            yearGoals: localStorage.getItem('year') || '[]'
+            yearGoals: localStorage.getItem('year') || '[]',
+            updatedAt: new Date().toISOString()
         };
         await db.ref('plannerUsers/' + currentUser.uid).set(payload);
     } catch (error) { console.error("Error syncing to Firebase:", error); }
+}
+
+function scheduleSyncToFirebase() {
+    if (!currentUser || !db || isApplyingRemoteData) return;
+    clearTimeout(syncDebounceTimer);
+    syncDebounceTimer = setTimeout(syncToFirebase, 600);
 }
 
 async function loadDataFromFirebase() {
     if (!currentUser || !db) return;
     try {
         const snapshot = await db.ref('plannerUsers/' + currentUser.uid).once('value');
-        if (snapshot.exists()) {
-            const data = snapshot.val();
-            let needsReload = false;
-            if (data.dailyData && data.dailyData !== localStorage.getItem('vibeProFinal')) {
-                needsReload = true;
+        if (!snapshot.exists()) return;
+
+        const data = snapshot.val() || {};
+        const fieldMap = {
+            dailyData: 'vibeProFinal',
+            reports: 'vibeReports',
+            trackedExams: 'vibeExams',
+            habits: 'vibeHabits',
+            settings: 'vibeSettings',
+            monthGoals: 'month',
+            yearGoals: 'year'
+        };
+
+        let changed = false;
+        isApplyingRemoteData = true;
+        Object.entries(fieldMap).forEach(([remoteKey, localKey]) => {
+            if (!Object.prototype.hasOwnProperty.call(data, remoteKey)) return;
+            const fallback = localKey === 'vibeProFinal' || localKey === 'vibeSettings' ? '{}' : '[]';
+            const value = data[remoteKey] || fallback;
+            if (value !== localStorage.getItem(localKey)) {
+                localStorage.setItem(localKey, value);
+                changed = true;
             }
-            if(data.dailyData) localStorage.setItem('vibeProFinal', data.dailyData);
-            if(data.reports) localStorage.setItem('vibeReports', data.reports);
-            if(data.trackedExams) localStorage.setItem('vibeExams', data.trackedExams);
-            if(data.habits) localStorage.setItem('vibeHabits', data.habits);
-            if(data.settings) localStorage.setItem('vibeSettings', data.settings);
-            if(data.monthGoals) localStorage.setItem('month', data.monthGoals);
-            if(data.yearGoals) localStorage.setItem('year', data.yearGoals);
-            
+        });
+
+        if (changed) {
             hydratePlannerState();
-            if (needsReload && appHasRendered) renderApp(true);
+            if (appHasRendered) renderApp(true);
         }
-    } catch (e) { console.error("Error loading data:", e); }
+    } catch (e) { 
+        console.error("Error loading data:", e); 
+    } finally {
+        isApplyingRemoteData = false;
+    }
 }
 
 let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
@@ -198,8 +223,8 @@ function buildSettings(source = {}) {
         soundEnabled: source.soundEnabled !== undefined ? source.soundEnabled : true,
         soundType: source.soundType || 'classic',
         notificationsEnabled: source.notificationsEnabled || false,
-        workMsg: source.workMsg || "TIME FOR A BREAK! â˜•",
-        breakMsg: source.breakMsg || "BACK TO WORK! ðŸš€",
+        workMsg: source.workMsg || "TIME FOR A BREAK!",
+        breakMsg: source.breakMsg || "BACK TO WORK!",
         hundredPercentMsg: source.hundredPercentMsg || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues."
     };
 }
@@ -536,7 +561,7 @@ function saveSettings() {
     if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
 
     localStorage.setItem('vibeSettings', JSON.stringify(settings));
-    syncToFirebase();
+    scheduleSyncToFirebase();
 
     document.getElementById('btnWork').innerText = `WORK (${settings.workTime}m)`;
     document.getElementById('btnBreak').innerText = `BREAK (${settings.breakTime}m)`;
@@ -628,7 +653,7 @@ function toggleTimer() {
 
 function resetTimer() { setTimerMode(currentMode); }
 
-function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); syncToFirebase(); }
+function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); scheduleSyncToFirebase(); }
 
 function calculateStreak() {
     let streak = 0;
@@ -679,7 +704,7 @@ function addHabit() {
     const habitText = "🔄 " + name;
     habitBlueprint.push({ id: Date.now(), text: habitText }); 
     localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
-    syncToFirebase();
+    scheduleSyncToFirebase();
     document.getElementById('habitName').value = ''; 
     renderHabitBlueprint();
 
@@ -706,7 +731,7 @@ function addHabit() {
 function removeHabit(id) {
     habitBlueprint = habitBlueprint.filter(h => Number(h.id) !== Number(id)); 
     localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
-    syncToFirebase(); 
+    scheduleSyncToFirebase(); 
     renderHabitBlueprint();
 }
 
@@ -1129,7 +1154,7 @@ function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
     const saved = getGoals(type);
     saved.push({text: toTitleCase(inp.value.trim()), done: false}); localStorage.setItem(type, JSON.stringify(saved));
-    syncToFirebase();
+    scheduleSyncToFirebase();
     renderGoal(type, toTitleCase(inp.value.trim()), false, saved.length - 1); inp.value = "";
 }
 
@@ -1146,7 +1171,7 @@ function renderGoal(type, text, done, idx) {
 function editGoal(type, idx, element) {
     let saved = getGoals(type); let text = element.innerText.trim();
     if (text === "") { element.innerText = saved[idx].text; return; }
-    saved[idx].text = toTitleCase(text); localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
+    saved[idx].text = toTitleCase(text); localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
 }
 
 function handleGoalCheck(type, idx, checkboxElement) {
@@ -1155,13 +1180,13 @@ function handleGoalCheck(type, idx, checkboxElement) {
         g.done = !g.done; checkboxElement.classList.toggle('checked', g.done);
         checkboxElement.nextElementSibling.classList.toggle('done', g.done);
         if(g.done) runConfetti({ particleCount: 80, spread: 100 }); 
-        localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
+        localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
     }
 }
 
 function removeGoal(type, idx) { 
     let saved = getGoals(type); saved.splice(idx, 1);
-    localStorage.setItem(type, JSON.stringify(saved)); syncToFirebase();
+    localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
     const ul = document.getElementById(`list-${type}`); ul.innerHTML = '';
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
@@ -1241,7 +1266,7 @@ function manualArchive() {
 function removeReport(id) {
     if(!confirm("Delete this archive?")) return;
     reports = reports.filter(r => Number(r.id) !== Number(id)); localStorage.setItem('vibeReports', JSON.stringify(reports));
-    syncToFirebase(); renderReports();
+    scheduleSyncToFirebase(); renderReports();
 }
 
 function renderReports() {
@@ -1412,7 +1437,7 @@ function addExam() {
     if(!name || !date) return;
     trackedExams.push({ id: Date.now(), name, date }); 
     localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
-    syncToFirebase();
+    scheduleSyncToFirebase();
     document.getElementById('examName').value = ''; 
     document.getElementById('examDate').value = ''; 
     renderExams();
@@ -1421,7 +1446,7 @@ function addExam() {
 function removeExam(id) {
     trackedExams = trackedExams.filter(e => Number(e.id) !== Number(id)); 
     localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
-    syncToFirebase(); 
+    scheduleSyncToFirebase(); 
     renderExams();
 }
 
@@ -1500,9 +1525,21 @@ function renderExams() {
 }
 
 function exportBackup() {
-    const backupData = { vibeProFinal: localStorage.getItem('vibeProFinal'), vibeReports: localStorage.getItem('vibeReports'), vibeExams: localStorage.getItem('vibeExams'), month: localStorage.getItem('month'), year: localStorage.getItem('year'), vibeSettings: localStorage.getItem('vibeSettings'), vibeNavOrder: localStorage.getItem('vibeNavOrder'), vibeHabits: localStorage.getItem('vibeHabits') };
-    const blob = new Blob([JSON.stringify(backupData)], { type: 'application/json' });
-    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `VIBE_PLANNER_${dateKeyFromLocal(new Date())}.json`;
+    const backupData = {
+        schemaVersion: 2,
+        app: 'PRO_PLANNER',
+        exportedAt: new Date().toISOString(),
+        vibeProFinal: localStorage.getItem('vibeProFinal') || '{}',
+        vibeReports: localStorage.getItem('vibeReports') || '[]',
+        vibeExams: localStorage.getItem('vibeExams') || '[]',
+        month: localStorage.getItem('month') || '[]',
+        year: localStorage.getItem('year') || '[]',
+        vibeSettings: localStorage.getItem('vibeSettings') || '{}',
+        vibeNavOrder: localStorage.getItem('vibeNavOrder') || '[]',
+        vibeHabits: localStorage.getItem('vibeHabits') || '[]'
+    };
+    const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `PRO_PLANNER_BACKUP_${dateKeyFromLocal(new Date())}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
 }
 
@@ -1511,12 +1548,15 @@ function importBackup(event) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'].forEach(k => { if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, data[k] || ''); });
-            hydratePlannerState(); renderApp(true); alert('Planner data restored.');
-        } catch (err) { alert("❌ Invalid backup file!"); }
+            const keys = ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'];
+            keys.forEach(k => { 
+                if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, data[k] || ''); 
+            });
+            hydratePlannerState(); renderApp(true); scheduleSyncToFirebase();
+            alert('Planner data restored.');
+        } catch (err) { alert("Invalid backup file."); }
     }; reader.readAsText(file); event.target.value = '';
 }
-
 document.addEventListener('keydown', function(event) {
     if (event.ctrlKey && event.key.toLowerCase() === 'n') {
         event.preventDefault(); scrollToToday();

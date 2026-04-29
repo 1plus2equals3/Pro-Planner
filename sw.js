@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pro-planner-v5';
+const CACHE_NAME = 'pro-planner-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -52,6 +52,9 @@ self.addEventListener('fetch', (e) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
         }
         return networkResponse;
+      }).catch(() => {
+        if (e.request.mode === 'navigate') return caches.match('./index.html');
+        return new Response('', { status: 504, statusText: 'Offline' });
       });
     })
   );

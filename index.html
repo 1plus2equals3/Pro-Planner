@@ -16,10 +16,10 @@
     
     <link rel="stylesheet" href="style.css">
     
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
+    <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-database-compat.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 </head>
 <body>
 
@@ -31,6 +31,7 @@
     <div class="controls-row" id="navControlsRow">
         <div class="streak-badge draggable-nav" id="nav-streak" draggable="true">🔥 <span id="streakCount">0</span></div>
         <button class="action-btn draggable-nav" id="nav-timer" draggable="true" onclick="openModal('pomodoroModal')">⏱️ TIMER</button>
+        <button class="action-btn draggable-nav" id="nav-habits" draggable="true" onclick="openModal('habitsModal')">HABITS</button>
         <button class="action-btn draggable-nav" id="nav-exams" draggable="true" onclick="openModal('examModal')">🎯 EXAMS</button>
         <button class="action-btn draggable-nav" id="nav-stats" draggable="true" onclick="openModal('statsModal')">📊 STATS</button>
         
@@ -94,6 +95,19 @@
     </div>
 </div>
 
+
+<div id="habitsModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2>HABIT BLUEPRINT</h2>
+        <p style="font-size:0.7rem; opacity:0.7; text-align:center; margin-top:-10px; margin-bottom: 20px;">These habits auto-fill every new day.</p>
+        <div class="input-group" style="margin-bottom: 15px;">
+            <input type="text" id="habitName" placeholder="HABIT (e.g. WORKOUT)" onkeydown="if(event.key==='Enter') addHabit()">
+            <button class="add-btn" onclick="addHabit()">ADD</button>
+        </div>
+        <ul id="habitList" style="flex-grow: 1; overflow-y: auto; max-height: 300px; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;"></ul>
+        <button class="action-btn" onclick="closeModal('habitsModal')" style="align-self:center; width:100%; margin-top: auto;">CLOSE</button>
+    </div>
+</div>
 <div id="settingsModal" class="modal-overlay">
     <div class="modal-card" style="position: relative; max-height: 85vh; overflow-y: auto;">
         <button onclick="closeModal('settingsModal')" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: rgba(255,255,255,0.4); font-size: 1.5rem; cursor: pointer; transition: 0.2s;" onmouseover="this.style.transform='scale(1.2)'; this.style.color='#ff7675'" onmouseout="this.style.transform='scale(1)'; this.style.color='rgba(255,255,255,0.4)'">✖</button>
@@ -227,6 +241,6 @@
     </div>
 </div>
 
-<script src="app.js"></script>
+<script defer src="app.js"></script>
 </body>
 </html>

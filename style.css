@@ -12,13 +12,16 @@
     --surface: rgba(0, 0, 0, 0.6);
 }
 
-* { scrollbar-width: none; box-sizing: border-box; }
-*::-webkit-scrollbar { display: none; }
+* { box-sizing: border-box; }
+* { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent; }
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.22); border-radius: 999px; }
+*::-webkit-scrollbar-track { background: transparent; }
 
 body {
     font-family: 'Segoe UI', system-ui, sans-serif;
     margin: 0; min-height: 100vh; display: flex; flex-direction: column;
-    color: var(--text-color); background-color: #000; user-select: none;
+    color: var(--text-color); background-color: #000;
     overflow-y: auto; overflow-x: hidden; font-weight: 700; 
 }
 
@@ -230,3 +233,4 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
     .timer-display { font-size: 3.5rem; letter-spacing: 4px;}
     .quote-banner { font-size: 0.65rem; padding: 10px; line-height: 1.5; }
 }
+button, .custom-checkbox, .prio-dot, .draggable-nav { user-select: none; }

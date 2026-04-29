@@ -1,20 +1,34 @@
 {
-  "name": "PLANNER",
+  "id": "/Pro-Planner/",
+  "name": "PRO PLANNER",
   "short_name": "Planner",
+  "description": "A fast offline-first planner for daily tasks, goals, exams, focus sessions, habits, and progress tracking.",
   "start_url": "./index.html?app=new",
+  "scope": "./",
   "display": "standalone",
   "background_color": "#050505",
   "theme_color": "#a29bfe",
+  "categories": ["productivity", "education", "utilities"],
   "icons": [
     {
       "src": "icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
     },
     {
       "src": "icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Open Today",
+      "short_name": "Today",
+      "url": "./index.html?app=new&view=today",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
