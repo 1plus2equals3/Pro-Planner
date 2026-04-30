@@ -179,10 +179,15 @@ async function syncToFirebase() {
     console.error("Sync error:", error);
   }
 }
+
 function scheduleSyncToFirebase() {
     if (!currentUser || !db || isApplyingRemoteData) return;
+
     clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(syncToFirebase, 1500);
+
+    syncDebounceTimer = setTimeout(() => {
+        syncToFirebase();
+    }, 1500);
 }
 
 async function loadDataFromFirebase() {
@@ -191,6 +196,8 @@ async function loadDataFromFirebase() {
     if (isApplyingRemoteData) return;
 
     try {
+        isApplyingRemoteData = true;
+
         const snapshot = await db.ref('plannerUsers/' + currentUser.uid).once('value');
         if (!snapshot.exists()) return;
 
@@ -232,6 +239,9 @@ let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
 let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
+let saveTimer = null;
+let syncDebounceTimer = null;
+let isApplyingRemoteData = false;
 
 let parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
 let settings = buildSettings(parsedSettings);
@@ -675,7 +685,18 @@ function toggleTimer() {
 
 function resetTimer() { setTimerMode(currentMode); }
 
-function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); scheduleSyncToFirebase(); }
+function save() {
+    clearTimeout(saveTimer);
+
+    saveTimer = setTimeout(() => {
+        try {
+            localStorage.setItem("dailyData", JSON.stringify(dailyData));
+            scheduleSyncToFirebase();
+        } catch (e) {
+            console.error("Save failed:", e);
+        }
+    }, 500);
+} 
 
 function calculateStreak() {
     let streak = 0;
@@ -998,29 +1019,36 @@ function renderDailyCard(date) {
 }
 
 function addTask(date) {
-    const val = document.getElementById(`in-${date}`).value;
-    const prio = document.getElementById(`prio-${date}`).value; 
-    const stTime = document.getElementById(`st-time-${date}`).value;
-    const enTime = document.getElementById(`en-time-${date}`).value;
-    
-    if(!val) return;
-    
-    let newTask = { text: toTitleCase(val.trim()), priority: prio, done: false };
-    if (stTime) newTask.startTime = stTime;
-    if (enTime) newTask.endTime = enTime;
+    const input = document.getElementById(`input-${date}`);
+    const text = input.value.trim();
+    if (!text) return;
 
-    dailyData[date].push(newTask); 
+    if (!dailyData[date]) dailyData[date] = [];
+
+    const newTask = {
+        text,
+        completed: false,
+        subtasks: []
+    };
+
+    dailyData[date].push(newTask);
+
+    const ul = document.getElementById(`list-${date}`);
+
     sortTasks(date);
-    
-    const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; 
-    dailyData[date].forEach((t, i) => renderTask(date, t, i));
-    
-    updateProgress(date); save(); calculateStreak(); 
-    
-    document.getElementById(`in-${date}`).value = "";
-    document.getElementById(`st-time-${date}`).value = "";
-    document.getElementById(`en-time-${date}`).value = "";
-    document.getElementById(`time-row-${date}`).classList.remove('show');
+
+    // only render last task (no full re-render)
+    renderTask(
+        date,
+        dailyData[date][dailyData[date].length - 1],
+        dailyData[date].length - 1
+    );
+
+    input.value = '';
+
+    updateProgress(date);
+    save();
+    calculateStreak();
 }
 
 let dragSourceDay = null;
@@ -1055,14 +1083,10 @@ else {
     dailyData[targetDate].splice(toIdx, 0, movedItem);
 }
         if (sourceDate !== targetDate) {
-            const fromUl = document.getElementById(`list-${sourceDate}`);
-            fromUl.innerHTML = ''; dailyData[sourceDate].forEach((t, i) => renderTask(sourceDate, t, i));
-            updateProgress(sourceDate);
-        }
-
+    updateProgress(sourceDate);
+}
         sortTasks(targetDate); save();
-        const toUl = document.getElementById(`list-${targetDate}`);
-        toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
+        renderApp(true);
         updateProgress(targetDate); calculateStreak();
     }
     return false;
@@ -1173,15 +1197,25 @@ function handleCheck(date, idx, checkboxElement) {
     }
 }
 
-function removeSpecificTask(date, idx) { 
-    dailyData[date].splice(idx, 1); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
-    dailyData[date].forEach((t, i) => renderTask(date, t, i)); updateProgress(date); save(); calculateStreak(); 
-}
+function removeSpecificTask(date, idx) {
+    if (!dailyData[date]) return;
 
-function removeDay(date) { 
-    if(confirm(`Remove entire day: ${date}?`)) {
-        delete dailyData[date]; document.getElementById(`card-${date}`).remove(); save(); calculateStreak(); 
-    }
+    dailyData[date].splice(idx, 1);
+
+    const ul = document.getElementById(`list-${date}`);
+
+    // remove only that specific task element
+    const li = ul.querySelector(`li[data-index="${idx}"]`);
+    if (li) li.remove();
+
+    // reindex remaining tasks
+    [...ul.children].forEach((child, i) => {
+        child.dataset.index = i;
+    });
+
+    updateProgress(date);
+    save();
+    calculateStreak();
 }
 
 function scrollTimeline(amount) { document.getElementById('daily-container').scrollBy({ left: amount, behavior: 'smooth' }); }
