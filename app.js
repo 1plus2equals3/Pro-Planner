@@ -1017,7 +1017,7 @@ function renderDailyCard(date) {
 }
 
 function addTask(date) {
-    const input = document.getElementById(`input-${date}`);
+    const input = document.getElementById(`in-${date}`);
     const text = input.value.trim();
     if (!text) return;
 
