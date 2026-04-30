@@ -1,8 +1,8 @@
-const CACHE_NAME = 'pro-planner-v6';
-const ASSETS = [
+const CACHE_NAME = 'pro-planner-v7';
+
+const STATIC_ASSETS = [
   './',
   './index.html',
-  './index.html?app=new',
   './style.css',
   './app.js',
   './manifest.json',
@@ -11,51 +11,63 @@ const ASSETS = [
   './icon-512.png'
 ];
 
-// 1. Install Event: Saari files ko cache mein daalo
+// INSTALL
 self.addEventListener('install', (e) => {
-  console.log('[Service Worker] Installing New Version:', CACHE_NAME);
-  self.skipWaiting(); // Naye version ko wait nahi karwayega, turant install karega
+  self.skipWaiting();
   e.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
-    })
+    caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS))
   );
 });
 
-// 2. Activate Event: Purane caches ko delete karo (Auto-Clean)
+// ACTIVATE
 self.addEventListener('activate', (e) => {
-  console.log('[Service Worker] Activating & Cleaning Old Caches...');
   e.waitUntil(
-    caches.keys().then((keyList) => {
-      return Promise.all(keyList.map((key) => {
-        if (key !== CACHE_NAME) {
-          console.log('[Service Worker] Removing old cache:', key);
-          return caches.delete(key);
-        }
-      }));
-    })
+    caches.keys().then(keys =>
+      Promise.all(
+        keys.map(key => key !== CACHE_NAME && caches.delete(key))
+      )
+    )
   );
-  return self.clients.claim(); // Turant control le lega saare tabs ka
+  self.clients.claim();
 });
 
-// 3. Fetch Event: Offline support ke liye
+// FETCH
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
-  e.respondWith(
-    caches.match(e.request).then((response) => {
-      if (response) return response;
+  const url = new URL(e.request.url);
 
-      return fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.ok) {
-          const responseClone = networkResponse.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
-        }
-        return networkResponse;
-      }).catch(() => {
-        if (e.request.mode === 'navigate') return caches.match('./index.html');
-        return new Response('', { status: 504, statusText: 'Offline' });
-      });
-    })
-  );
+  // ✅ 1. HTML → Network First
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put('./index.html', copy));
+          return res;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
+  // ✅ 2. Static Assets → Cache First
+  if (url.origin === self.location.origin) {
+    e.respondWith(
+      caches.match(e.request).then(cached => {
+        if (cached) return cached;
+
+        return fetch(e.request).then(res => {
+          if (!res || !res.ok) return res;
+          const copy = res.clone();
+          caches.open(CACHE_NAME).then(cache => cache.put(e.request, copy));
+          return res;
+        });
+      })
+    );
+    return;
+  }
+
+  // ✅ 3. External requests (Firebase/CDN) → Network Only
+  e.respondWith(fetch(e.request));
 });
