@@ -240,8 +240,6 @@ let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
 let saveTimer = null;
-var syncDebounceTimer = null;
-let isApplyingRemoteData = false;
 
 let parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
 let settings = buildSettings(parsedSettings);
