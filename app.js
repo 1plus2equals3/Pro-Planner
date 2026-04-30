@@ -144,30 +144,52 @@ function toggleAuth() {
 }
 
 async function syncToFirebase() {
-    if (!currentUser || !db || isApplyingRemoteData) return; 
-    try {
-        const payload = {
-            dailyData: JSON.stringify(dailyData),
-            reports: JSON.stringify(reports),
-            trackedExams: JSON.stringify(trackedExams),
-            habits: JSON.stringify(habitBlueprint),
-            settings: JSON.stringify(settings),
-            monthGoals: localStorage.getItem('month') || '[]',
-            yearGoals: localStorage.getItem('year') || '[]',
-            updatedAt: new Date().toISOString()
-        };
-        await db.ref('plannerUsers/' + currentUser.uid).set(payload);
-    } catch (error) { console.error("Error syncing to Firebase:", error); }
-}
+  if (!currentUser || !db || isApplyingRemoteData) return;
 
+  try {
+    const ref = db.ref('plannerUsers/' + currentUser.uid);
+
+    // 🔥 get remote data
+    const snapshot = await ref.once('value');
+    const remote = snapshot.val();
+
+    const localTime = new Date().toISOString();
+    const remoteTime = remote?.updatedAt;
+
+    // ⚠️ conflict protection
+    if (remoteTime && new Date(remoteTime) > new Date(localTime)) {
+      console.warn("Remote is newer → skipping overwrite");
+      return;
+    }
+
+    const payload = {
+      dailyData: JSON.stringify(dailyData),
+      reports: JSON.stringify(reports),
+      trackedExams: JSON.stringify(trackedExams),
+      habits: JSON.stringify(habitBlueprint),
+      settings: JSON.stringify(settings),
+      monthGoals: localStorage.getItem('month') || '[]',
+      yearGoals: localStorage.getItem('year') || '[]',
+      updatedAt: localTime
+    };
+
+    await ref.update(payload);
+
+  } catch (error) {
+    console.error("Sync error:", error);
+  }
+}
 function scheduleSyncToFirebase() {
     if (!currentUser || !db || isApplyingRemoteData) return;
     clearTimeout(syncDebounceTimer);
-    syncDebounceTimer = setTimeout(syncToFirebase, 600);
+    syncDebounceTimer = setTimeout(syncToFirebase, 1500);
 }
 
 async function loadDataFromFirebase() {
     if (!currentUser || !db) return;
+
+    if (isApplyingRemoteData) return;
+
     try {
         const snapshot = await db.ref('plannerUsers/' + currentUser.uid).once('value');
         if (!snapshot.exists()) return;
