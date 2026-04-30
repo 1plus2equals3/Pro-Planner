@@ -1037,9 +1037,23 @@ function handleDropDay(e) {
         const fromIdx = parseInt(dragSourceDay.dataset.index);
         const toIdx = parseInt(this.dataset.index);
 
-        let [movedItem] = dailyData[sourceDate].splice(fromIdx, 1);
-        dailyData[targetDate].splice(toIdx, 0, movedItem);
+        let movedItem = dailyData[sourceDate][fromIdx];
 
+// ✅ CASE 1: Same day reorder
+if (sourceDate === targetDate) {
+    dailyData[sourceDate].splice(fromIdx, 1);
+
+    // adjust index after removal
+    const adjustedIdx = fromIdx < toIdx ? toIdx - 1 : toIdx;
+
+    dailyData[sourceDate].splice(adjustedIdx, 0, movedItem);
+}
+
+// ✅ CASE 2: Different day move
+else {
+    dailyData[sourceDate].splice(fromIdx, 1);
+    dailyData[targetDate].splice(toIdx, 0, movedItem);
+}
         if (sourceDate !== targetDate) {
             const fromUl = document.getElementById(`list-${sourceDate}`);
             fromUl.innerHTML = ''; dailyData[sourceDate].forEach((t, i) => renderTask(sourceDate, t, i));
