@@ -1018,16 +1018,19 @@ function renderDailyCard(date) {
 
 function addTask(date) {
     const input = document.getElementById(`in-${date}`);
-    const text = input.value.trim();
+const prioritySelect = document.getElementById(`prio-${date}`);
+const priority = prioritySelect ? prioritySelect.value : "prio-low";
+   const text = input.value.trim();
     if (!text) return;
 
     if (!dailyData[date]) dailyData[date] = [];
 
-    const newTask = {
-        text,
-        completed: false,
-        subtasks: []
-    };
+ const newTask = {
+    text,
+    done: false,
+    priority: priority,
+    subtasks: []
+};
 
     dailyData[date].push(newTask);
 
