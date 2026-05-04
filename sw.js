@@ -42,20 +42,30 @@ self.addEventListener('activate', (e) => {
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
 
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then((networkResponse) => {
+        const responseClone = networkResponse.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', responseClone));
+        return networkResponse;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
+
   e.respondWith(
     caches.match(e.request).then((response) => {
-      if (response) return response;
-
-      return fetch(e.request).then((networkResponse) => {
+      const networkFetch = fetch(e.request).then((networkResponse) => {
         if (networkResponse && networkResponse.ok) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
         }
         return networkResponse;
       }).catch(() => {
-        if (e.request.mode === 'navigate') return caches.match('./index.html');
         return new Response('', { status: 504, statusText: 'Offline' });
       });
+
+      return response || networkFetch;
     })
   );
 });
