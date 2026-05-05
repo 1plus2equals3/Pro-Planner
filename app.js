@@ -36,54 +36,6 @@ function escapeHTML(value) {
     }[char]));
 }
 
-const HABIT_PREFIX = '\u{1F504} ';
-const VALID_PRIORITIES = new Set(['prio-high', 'prio-med', 'prio-low']);
-
-function parseDateKey(dateStr) {
-    const match = String(dateStr || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
-    if (!match) return null;
-    const year = Number(match[1]);
-    const month = Number(match[2]);
-    const day = Number(match[3]);
-    const parsed = new Date(year, month - 1, day);
-    if (parsed.getFullYear() !== year || parsed.getMonth() !== month - 1 || parsed.getDate() !== day) return null;
-    return parsed;
-}
-
-function formatDateLabel(dateStr) {
-    const parsed = parseDateKey(dateStr);
-    return parsed ? parsed.toDateString().toUpperCase() : escapeHTML(dateStr);
-}
-
-function isHabitTask(task) {
-    return String(task && task.text || '').startsWith(HABIT_PREFIX);
-}
-
-function isTaskComplete(task) {
-    if (!task) return false;
-    if (Array.isArray(task.subtasks) && task.subtasks.length > 0) return task.subtasks.every(st => !!st.done);
-    return !!task.done;
-}
-
-function createId(prefix = 'id') {
-    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-}
-
-function safeSetStorage(key, value) {
-    try {
-        localStorage.setItem(key, value);
-        return true;
-    } catch (error) {
-        console.error(`Could not write localStorage key: ${key}`, error);
-        alert("Storage is full or blocked. Backup your planner before adding more data.");
-        return false;
-    }
-}
-
-function markLocalUpdated() {
-    safeSetStorage('vibeUpdatedAt', new Date().toISOString());
-}
-
 function runConfetti(options) {
     if (typeof confetti === 'function') confetti(options);
 }
@@ -142,30 +94,6 @@ function getGoals(type) {
     return safeArray(safeReadJSON(type, []));
 }
 
-function normalizeTask(task) {
-    const source = safeObject(task);
-    const text = String(source.text || '').trim();
-    return {
-        ...source,
-        id: source.id || createId('task'),
-        text,
-        priority: VALID_PRIORITIES.has(source.priority) ? source.priority : 'prio-low',
-        done: !!source.done,
-        subtasks: Array.isArray(source.subtasks)
-            ? source.subtasks.map(st => ({ ...safeObject(st), text: String(st && st.text || '').trim(), done: !!(st && st.done) })).filter(st => st.text)
-            : undefined
-    };
-}
-
-function normalizeDailyData(value) {
-    const normalized = {};
-    Object.entries(safeObject(value)).forEach(([dateStr, tasks]) => {
-        if (!parseDateKey(dateStr)) return;
-        normalized[dateStr] = safeArray(tasks).map(normalizeTask).filter(task => task.text);
-    });
-    return normalized;
-}
-
 if (auth) auth.onAuthStateChanged(async (user) => {
     const btn = document.getElementById('authBtnModal');
     const status = document.getElementById('syncStatus');
@@ -218,7 +146,6 @@ function toggleAuth() {
 async function syncToFirebase() {
     if (!currentUser || !db || isApplyingRemoteData) return; 
     try {
-        const updatedAt = localStorage.getItem('vibeUpdatedAt') || new Date().toISOString();
         const payload = {
             dailyData: JSON.stringify(dailyData),
             reports: JSON.stringify(reports),
@@ -227,15 +154,13 @@ async function syncToFirebase() {
             settings: JSON.stringify(settings),
             monthGoals: localStorage.getItem('month') || '[]',
             yearGoals: localStorage.getItem('year') || '[]',
-            navOrder: localStorage.getItem('vibeNavOrder') || '[]',
-            updatedAt
+            updatedAt: new Date().toISOString()
         };
         await db.ref('plannerUsers/' + currentUser.uid).set(payload);
     } catch (error) { console.error("Error syncing to Firebase:", error); }
 }
 
 function scheduleSyncToFirebase() {
-    if (!isApplyingRemoteData) markLocalUpdated();
     if (!currentUser || !db || isApplyingRemoteData) return;
     clearTimeout(syncDebounceTimer);
     syncDebounceTimer = setTimeout(syncToFirebase, 600);
@@ -248,21 +173,6 @@ async function loadDataFromFirebase() {
         if (!snapshot.exists()) return;
 
         const data = snapshot.val() || {};
-        const remoteUpdatedAt = data.updatedAt ? Date.parse(data.updatedAt) : 0;
-        const localUpdatedAt = localStorage.getItem('vibeUpdatedAt') ? Date.parse(localStorage.getItem('vibeUpdatedAt')) : 0;
-        const localPlannerRaw = localStorage.getItem('vibeProFinal');
-        const localHasPlannerData = !!localPlannerRaw && localPlannerRaw !== '{}';
-
-        if (!localUpdatedAt && localHasPlannerData && remoteUpdatedAt) {
-            markLocalUpdated();
-            await syncToFirebase();
-            return;
-        }
-        if (localUpdatedAt && remoteUpdatedAt && localUpdatedAt > remoteUpdatedAt) {
-            await syncToFirebase();
-            return;
-        }
-
         const fieldMap = {
             dailyData: 'vibeProFinal',
             reports: 'vibeReports',
@@ -270,8 +180,7 @@ async function loadDataFromFirebase() {
             habits: 'vibeHabits',
             settings: 'vibeSettings',
             monthGoals: 'month',
-            yearGoals: 'year',
-            navOrder: 'vibeNavOrder'
+            yearGoals: 'year'
         };
 
         let changed = false;
@@ -281,11 +190,10 @@ async function loadDataFromFirebase() {
             const fallback = localKey === 'vibeProFinal' || localKey === 'vibeSettings' ? '{}' : '[]';
             const value = data[remoteKey] || fallback;
             if (value !== localStorage.getItem(localKey)) {
-                safeSetStorage(localKey, value);
+                localStorage.setItem(localKey, value);
                 changed = true;
             }
         });
-        if (data.updatedAt) safeSetStorage('vibeUpdatedAt', data.updatedAt);
 
         if (changed) {
             hydratePlannerState();
@@ -298,7 +206,7 @@ async function loadDataFromFirebase() {
     }
 }
 
-let dailyData = normalizeDailyData(safeReadJSON('vibeProFinal', {}));
+let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
 let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
@@ -322,7 +230,7 @@ function buildSettings(source = {}) {
 }
 
 function hydratePlannerState() {
-    dailyData = normalizeDailyData(safeReadJSON('vibeProFinal', {}));
+    dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
     reports = safeArray(safeReadJSON('vibeReports', []));
     trackedExams = safeArray(safeReadJSON('vibeExams', []));
     habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
@@ -430,7 +338,7 @@ function checkUpcomingExamNotification() {
         else msg = `${closest.diffDays} DAYS LEFT FOR ${closest.name}! KEEP HUSTLING! 📚`;
 
         playAlarm('chime'); showNotification("🎯 UPCOMING EXAM", msg);
-        safeSetStorage('vibeExamNotifDate', todayStr);
+        localStorage.setItem('vibeExamNotifDate', todayStr);
     }
 }
 
@@ -448,8 +356,7 @@ function handleNavDrop(e) {
         const targetIdx = allItems.indexOf(this);
         if (draggedIdx < targetIdx) { this.after(draggedNav); } else { this.before(draggedNav); }
         const newOrder = [...container.querySelectorAll('.draggable-nav')].map(el => el.id);
-        safeSetStorage('vibeNavOrder', JSON.stringify(newOrder));
-        scheduleSyncToFirebase();
+        localStorage.setItem('vibeNavOrder', JSON.stringify(newOrder));
     }
     return false;
 }
@@ -458,15 +365,15 @@ function initNavDragDrop() {
     const savedOrder = safeArray(safeReadJSON('vibeNavOrder', []));
     const container = document.getElementById('navControlsRow');
     if (!container) return;
-    if (savedOrder.length > 0) {
+    if (container.dataset.navReady === 'true') return;
+    container.dataset.navReady = 'true';
+    if (savedOrder) {
         savedOrder.forEach(id => {
             const el = document.getElementById(id);
             if (el) container.appendChild(el);
         });
         container.appendChild(document.getElementById('importFile'));
     }
-    if (container.dataset.navReady === 'true') return;
-    container.dataset.navReady = 'true';
     document.querySelectorAll('.draggable-nav').forEach(el => {
         el.addEventListener('dragstart', handleNavDragStart);
         el.addEventListener('dragover', handleNavDragOver);
@@ -616,7 +523,7 @@ function applySettings() {
     if(hInput) hInput.value = settings.hundredPercentMsg;
     
     document.querySelectorAll('.color-swatch').forEach(s => {
-        s.classList.toggle('active', s.style.background === settings.theme || s.style.backgroundColor === settings.theme);
+        if(s.style.background === settings.theme) s.classList.add('active');
     });
 
     document.getElementById('btnWork').innerText = `WORK (${settings.workTime || 25}m)`;
@@ -653,7 +560,8 @@ function saveSettings() {
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
 
-    if (safeSetStorage('vibeSettings', JSON.stringify(settings))) scheduleSyncToFirebase();
+    localStorage.setItem('vibeSettings', JSON.stringify(settings));
+    scheduleSyncToFirebase();
 
     document.getElementById('btnWork').innerText = `WORK (${settings.workTime}m)`;
     document.getElementById('btnBreak').innerText = `BREAK (${settings.breakTime}m)`;
@@ -705,7 +613,7 @@ function initBackground() {
     }, 20000); 
 }
 
-let timerInterval; let timeLeft = 25 * 60; let isRunning = false; let currentMode = 'work'; let timerEndsAt = null;
+let timerInterval; let timeLeft = 25 * 60; let isRunning = false; let currentMode = 'work';
 
 function updateTimerDisplay() {
     const m = Math.floor(timeLeft / 60).toString().padStart(2, '0');
@@ -717,7 +625,6 @@ function updateTimerDisplay() {
 
 function setTimerMode(mode) {
     if(isRunning) toggleTimer(); 
-    timerEndsAt = null;
     currentMode = mode;
     document.getElementById('btnWork').classList.toggle('active', mode === 'work');
     document.getElementById('btnBreak').classList.toggle('active', mode === 'break');
@@ -728,17 +635,13 @@ function setTimerMode(mode) {
 function toggleTimer() {
     const btn = document.getElementById('btnTimerStart');
     if (isRunning) {
-        clearInterval(timerInterval);
-        if (timerEndsAt) timeLeft = Math.max(0, Math.ceil((timerEndsAt - Date.now()) / 1000));
-        timerEndsAt = null;
-        isRunning = false; btn.innerText = "START"; updateTimerDisplay();
+        clearInterval(timerInterval); isRunning = false; btn.innerText = "START"; updateTimerDisplay();
     } else {
-        timerEndsAt = Date.now() + (timeLeft * 1000);
         isRunning = true; btn.innerText = "PAUSE";
         timerInterval = setInterval(() => {
-            timeLeft = Math.max(0, Math.ceil((timerEndsAt - Date.now()) / 1000)); updateTimerDisplay();
+            timeLeft--; updateTimerDisplay();
             if (timeLeft <= 0) {
-                clearInterval(timerInterval); timerEndsAt = null; isRunning = false; btn.innerText = "START";
+                clearInterval(timerInterval); isRunning = false; btn.innerText = "START";
                 runConfetti({ particleCount: 150, spread: 80 }); playAlarm();
                 let msg = currentMode === 'work' ? settings.workMsg : settings.breakMsg;
                 showNotification("TIMER FINISHED", msg);
@@ -750,9 +653,7 @@ function toggleTimer() {
 
 function resetTimer() { setTimerMode(currentMode); }
 
-function save() {
-    if (safeSetStorage('vibeProFinal', JSON.stringify(dailyData))) scheduleSyncToFirebase();
-}
+function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); scheduleSyncToFirebase(); }
 
 function calculateStreak() {
     let streak = 0;
@@ -800,9 +701,9 @@ function updateProgress(date) {
 function addHabit() {
     const name = toTitleCase(document.getElementById('habitName').value.trim());
     if(!name) return;
-    const habit = { id: Date.now(), text: HABIT_PREFIX + name };
-    habitBlueprint.push(habit); 
-    safeSetStorage('vibeHabits', JSON.stringify(habitBlueprint)); 
+    const habitText = "🔄 " + name;
+    habitBlueprint.push({ id: Date.now(), text: habitText }); 
+    localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
     scheduleSyncToFirebase();
     document.getElementById('habitName').value = ''; 
     renderHabitBlueprint();
@@ -812,8 +713,8 @@ function addHabit() {
 
     Object.keys(dailyData).forEach(dateStr => {
         if (dateStr >= todayStr) {
-            if (!dailyData[dateStr].some(t => t.habitId === habit.id || t.text === habit.text)) {
-                dailyData[dateStr].push({ id: createId('task'), text: habit.text, priority: 'prio-med', done: false, habitId: habit.id });
+            if (!dailyData[dateStr].some(t => t.text === habitText)) {
+                dailyData[dateStr].push({ text: habitText, priority: 'prio-med', done: false });
                 changed = true;
                 const ul = document.getElementById(`list-${dateStr}`);
                 if(ul) {
@@ -828,29 +729,9 @@ function addHabit() {
 }
 
 function removeHabit(id) {
-    const removedHabit = habitBlueprint.find(h => Number(h.id) === Number(id));
     habitBlueprint = habitBlueprint.filter(h => Number(h.id) !== Number(id)); 
-    safeSetStorage('vibeHabits', JSON.stringify(habitBlueprint)); 
-    const todayStr = dateKeyFromLocal(new Date());
-    let changed = false;
-    if (removedHabit) {
-        Object.keys(dailyData).forEach(dateStr => {
-            if (dateStr >= todayStr) {
-                const before = dailyData[dateStr].length;
-                dailyData[dateStr] = dailyData[dateStr].filter(t => !(t.habitId === removedHabit.id || t.text === removedHabit.text));
-                if (dailyData[dateStr].length !== before) {
-                    changed = true;
-                    const ul = document.getElementById(`list-${dateStr}`);
-                    if (ul) {
-                        ul.innerHTML = '';
-                        dailyData[dateStr].forEach((t, i) => renderTask(dateStr, t, i));
-                    }
-                    updateProgress(dateStr);
-                }
-            }
-        });
-    }
-    if (changed) save(); else scheduleSyncToFirebase(); 
+    localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
+    scheduleSyncToFirebase(); 
     renderHabitBlueprint();
 }
 
@@ -875,58 +756,36 @@ function renderHabitBlueprint() {
 function checkRollover() {
     const todayStr = dateKeyFromLocal(new Date());
     let changed = false;
-
-    if (!dailyData[todayStr]) {
-        dailyData[todayStr] = [];
-        changed = true;
-    }
-
-    habitBlueprint.forEach(h => {
-        if (!dailyData[todayStr].some(t => t.habitId === h.id || t.text === h.text)) {
-            dailyData[todayStr].push({ id: createId('task'), text: h.text, priority: 'prio-med', done: false, habitId: h.id });
-            changed = true;
-        }
-    });
-
     Object.keys(dailyData).forEach(dateStr => {
         if (dateStr < todayStr) {
-            dailyData[dateStr].forEach((task, idx) => {
-                if (isTaskComplete(task) || isHabitTask(task)) return;
-
-                const sourceKey = task.id || `${dateStr}-${idx}-${task.text}`;
-                const alreadyCarriedToday = dailyData[todayStr].some(t =>
-                    t.rolloverSourceKey === sourceKey ||
-                    (!t.rolloverSourceKey && t.text === task.text && !isTaskComplete(t))
-                );
-
-                if (!alreadyCarriedToday) {
-                    const pendingSubtasks = Array.isArray(task.subtasks)
-                        ? task.subtasks.filter(st => !st.done).map(st => ({ text: st.text, done: false }))
-                        : [];
-                    const newTask = {
-                        id: createId('task'),
-                        text: task.text,
-                        priority: VALID_PRIORITIES.has(task.priority) ? task.priority : 'prio-low',
-                        done: false,
-                        stCollapsed: task.stCollapsed || false,
-                        rolledOver: true,
-                        rolloverSourceDate: dateStr,
-                        rolloverSourceKey: sourceKey
-                    };
-                    if (pendingSubtasks.length > 0) newTask.subtasks = pendingSubtasks;
-                    dailyData[todayStr].push(newTask);
-                    changed = true;
-                }
-
-                if (task.rolledOverTo !== todayStr) {
+            dailyData[dateStr].forEach(task => {
+                if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
-                    task.rolledOverTo = todayStr;
-                    changed = true;
+                    if (!dailyData[todayStr]) { 
+                        dailyData[todayStr] = []; changed = true; 
+                        habitBlueprint.forEach(h => { dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false }); });
+                    }
+                    if (task.text.startsWith("🔄 ")) return;
+
+                    if (!dailyData[todayStr].some(t => t.text === task.text)) {
+                        let newTask = { text: task.text, priority: task.priority || 'prio-low', done: false, stCollapsed: task.stCollapsed || false };
+                        if (task.subtasks && task.subtasks.length > 0) {
+                            let pendingSubtasks = task.subtasks.filter(st => !st.done);
+                            if (pendingSubtasks.length > 0) { newTask.subtasks = pendingSubtasks.map(st => ({ text: st.text, done: false })); }
+                        }
+                        dailyData[todayStr].push(newTask);
+                        changed = true;
+                    }
                 }
             });
         }
     });
 
+    if (!dailyData[todayStr] && habitBlueprint.length > 0) {
+        dailyData[todayStr] = [];
+        habitBlueprint.forEach(h => { dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false }); });
+        changed = true;
+    }
     if (changed) { save(); calculateStreak(); }
 }
 
@@ -961,7 +820,7 @@ function scrollToToday(instant = false) {
 function createDay(instant = false) {
     const date = document.getElementById('datePicker').value; if(!date || dailyData[date]) return;
     dailyData[date] = []; 
-    habitBlueprint.forEach(h => { dailyData[date].push({ id: createId('task'), text: h.text, priority: 'prio-med', done: false, habitId: h.id }); });
+    habitBlueprint.forEach(h => { dailyData[date].push({ text: h.text, priority: 'prio-med', done: false }); });
     save(); const container = document.getElementById('daily-container');
     container.innerHTML = ''; Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
     setTimeout(() => { 
@@ -978,7 +837,7 @@ function createMonth() {
         const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
         if (!dailyData[dateStr]) { 
             dailyData[dateStr] = []; 
-            habitBlueprint.forEach(h => { dailyData[dateStr].push({ id: createId('task'), text: h.text, priority: 'prio-med', done: false, habitId: h.id }); });
+            habitBlueprint.forEach(h => { dailyData[dateStr].push({ text: h.text, priority: 'prio-med', done: false }); });
             changed = true; 
         }
     }
@@ -1038,7 +897,7 @@ function createTaskElement(date, task, idx) {
         let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
         
         timeBadgeHTML = `
-            <div class="task-clock-icon" title="${escapeHTML(tooltipText)}">
+            <div class="task-clock-icon" title="${tooltipText}">
                 <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
             </div>
         `;
@@ -1090,7 +949,7 @@ function renderDailyCard(date) {
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
     card.innerHTML = `
         <div class="card-header">
-            <h3>📅 ${formatDateLabel(date)}</h3>
+            <h3>📅 ${new Date(date).toDateString().toUpperCase()}</h3>
             <span id="perc-${date}" style="font-size:0.85rem; opacity:0.9; font-weight:900; color:var(--primary); text-shadow: 0 0 10px var(--primary);">0%</span>
         </div>
         <div class="progress-container"><div class="progress-fill" id="prog-${date}"></div></div>
@@ -1113,7 +972,7 @@ function renderDailyCard(date) {
         <button class="remove-day-btn" onclick="removeDay('${date}')">REMOVE DAY</button>
     `;
     document.getElementById('daily-container').appendChild(card); init3DTilt(card);
-    dailyData[date].forEach((t, idx) => renderTask(date, t, idx)); updateProgress(date);
+    sortTasks(date); dailyData[date].forEach((t, idx) => renderTask(date, t, idx)); updateProgress(date);
 }
 
 function addTask(date) {
@@ -1122,10 +981,9 @@ function addTask(date) {
     const stTime = document.getElementById(`st-time-${date}`).value;
     const enTime = document.getElementById(`en-time-${date}`).value;
     
-    const text = toTitleCase(val.trim());
-    if(!text) return;
+    if(!val) return;
     
-    let newTask = { id: createId('task'), text, priority: prio, done: false };
+    let newTask = { text: toTitleCase(val.trim()), priority: prio, done: false };
     if (stTime) newTask.startTime = stTime;
     if (enTime) newTask.endTime = enTime;
 
@@ -1166,7 +1024,7 @@ function handleDropDay(e) {
             updateProgress(sourceDate);
         }
 
-        save();
+        sortTasks(targetDate); save();
         const toUl = document.getElementById(`list-${targetDate}`);
         toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
         updateProgress(targetDate); calculateStreak();
@@ -1191,7 +1049,7 @@ function handleDropUl(e, targetDate) {
             updateProgress(sourceDate);
         }
 
-        save();
+        sortTasks(targetDate); save();
         const toUl = document.getElementById(`list-${targetDate}`);
         toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
         updateProgress(targetDate); calculateStreak();
@@ -1295,8 +1153,8 @@ function scrollTimeline(amount) { document.getElementById('daily-container').scr
 function addGoal(type) {
     const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
     const saved = getGoals(type);
-    saved.push({text: toTitleCase(inp.value.trim()), done: false}); 
-    if (safeSetStorage(type, JSON.stringify(saved))) scheduleSyncToFirebase();
+    saved.push({text: toTitleCase(inp.value.trim()), done: false}); localStorage.setItem(type, JSON.stringify(saved));
+    scheduleSyncToFirebase();
     renderGoal(type, toTitleCase(inp.value.trim()), false, saved.length - 1); inp.value = "";
 }
 
@@ -1313,7 +1171,7 @@ function renderGoal(type, text, done, idx) {
 function editGoal(type, idx, element) {
     let saved = getGoals(type); let text = element.innerText.trim();
     if (text === "") { element.innerText = saved[idx].text; return; }
-    saved[idx].text = toTitleCase(text); if (safeSetStorage(type, JSON.stringify(saved))) scheduleSyncToFirebase();
+    saved[idx].text = toTitleCase(text); localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
 }
 
 function handleGoalCheck(type, idx, checkboxElement) {
@@ -1322,13 +1180,13 @@ function handleGoalCheck(type, idx, checkboxElement) {
         g.done = !g.done; checkboxElement.classList.toggle('checked', g.done);
         checkboxElement.nextElementSibling.classList.toggle('done', g.done);
         if(g.done) runConfetti({ particleCount: 80, spread: 100 }); 
-        if (safeSetStorage(type, JSON.stringify(saved))) scheduleSyncToFirebase();
+        localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
     }
 }
 
 function removeGoal(type, idx) { 
     let saved = getGoals(type); saved.splice(idx, 1);
-    if (safeSetStorage(type, JSON.stringify(saved))) scheduleSyncToFirebase();
+    localStorage.setItem(type, JSON.stringify(saved)); scheduleSyncToFirebase();
     const ul = document.getElementById(`list-${type}`); ul.innerHTML = '';
     saved.forEach((g, i) => renderGoal(type, g.text, g.done, i));
 }
@@ -1347,8 +1205,7 @@ function manualArchive() {
     let dailyPercents = [];
 
     Object.keys(dailyData).sort().forEach(dateStr => {
-        const d = parseDateKey(dateStr);
-        if (!d) return;
+        const d = new Date(dateStr);
         if (d.getMonth() + 1 === targetMonth && d.getFullYear() === targetYear) {
             daysFound++; 
             let tasksThisDay = dailyData[dateStr];
@@ -1401,16 +1258,15 @@ function manualArchive() {
             id: Date.now(), month: monthLabel, stats: `${perc}% DONE`, details: `${executableCompleted}/${executableTotal} ACTIONS`, 
             advanced: { prioStats, totalTasks, completedTasks, totalSubtasks, completedSubtasks, daysFound, avgTasksPerDay, dailyPercents }
         });
-        safeSetStorage('vibeReports', JSON.stringify(reports)); save(); renderReports(); calculateStreak(); 
+        localStorage.setItem('vibeReports', JSON.stringify(reports)); save(); renderReports(); calculateStreak(); 
         alert(`${monthLabel} archived successfully!`);
     } else { alert("No data found for the previous month."); }
 }
 
 function removeReport(id) {
     if(!confirm("Delete this archive?")) return;
-    reports = reports.filter(r => Number(r.id) !== Number(id)); 
-    if (safeSetStorage('vibeReports', JSON.stringify(reports))) scheduleSyncToFirebase(); 
-    renderReports();
+    reports = reports.filter(r => Number(r.id) !== Number(id)); localStorage.setItem('vibeReports', JSON.stringify(reports));
+    scheduleSyncToFirebase(); renderReports();
 }
 
 function renderReports() {
@@ -1534,9 +1390,9 @@ function renderStats() {
     let chartData = []; let labels = []; let rowsHTML = '';
     for(let i=6; i>=0; i--) {
         let d = new Date(); d.setDate(d.getDate() - i); let dStr = dateKeyFromLocal(d);
-        let perc = getDailyScore(dStr) || 0;
-        const labelDate = parseDateKey(dStr) || d;
-        chartData.push(perc); labels.push(labelDate.toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
+        let tasks = dailyData[dStr] || []; let total = tasks.length, done = tasks.filter(t => t.done).length;
+        let perc = total === 0 ? 0 : Math.round((done/total)*100);
+        chartData.push(perc); labels.push(new Date(dStr).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
         rowsHTML += `
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; margin-bottom: 12px;">
                 <span style="width: 60px;">${labels[6-i]}</span>
@@ -1580,7 +1436,8 @@ function addExam() {
     const date = document.getElementById('examDate').value;
     if(!name || !date) return;
     trackedExams.push({ id: Date.now(), name, date }); 
-    if (safeSetStorage('vibeExams', JSON.stringify(trackedExams))) scheduleSyncToFirebase();
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    scheduleSyncToFirebase();
     document.getElementById('examName').value = ''; 
     document.getElementById('examDate').value = ''; 
     renderExams();
@@ -1588,7 +1445,8 @@ function addExam() {
 
 function removeExam(id) {
     trackedExams = trackedExams.filter(e => Number(e.id) !== Number(id)); 
-    if (safeSetStorage('vibeExams', JSON.stringify(trackedExams))) scheduleSyncToFirebase(); 
+    localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
+    scheduleSyncToFirebase(); 
     renderExams();
 }
 
@@ -1678,65 +1536,11 @@ function exportBackup() {
         year: localStorage.getItem('year') || '[]',
         vibeSettings: localStorage.getItem('vibeSettings') || '{}',
         vibeNavOrder: localStorage.getItem('vibeNavOrder') || '[]',
-        vibeHabits: localStorage.getItem('vibeHabits') || '[]',
-        vibeUpdatedAt: localStorage.getItem('vibeUpdatedAt') || new Date().toISOString()
+        vibeHabits: localStorage.getItem('vibeHabits') || '[]'
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `PRO_PLANNER_BACKUP_${dateKeyFromLocal(new Date())}.json`;
     document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
-}
-
-function parseBackupJSONField(data, key, fallback) {
-    if (!Object.prototype.hasOwnProperty.call(data, key)) return null;
-    const value = data[key];
-    if (typeof value === 'string') {
-        try { return JSON.parse(value || JSON.stringify(fallback)); }
-        catch { return fallback; }
-    }
-    return value ?? fallback;
-}
-
-function normalizeGoalList(value) {
-    return safeArray(value).map(g => ({
-        text: toTitleCase(String(g && g.text || '').trim()),
-        done: !!(g && g.done)
-    })).filter(g => g.text);
-}
-
-function normalizeBackupPayload(data) {
-    const normalized = {};
-    const daily = parseBackupJSONField(data, 'vibeProFinal', {});
-    if (daily !== null) normalized.vibeProFinal = JSON.stringify(normalizeDailyData(daily));
-
-    const settingsData = parseBackupJSONField(data, 'vibeSettings', {});
-    if (settingsData !== null) normalized.vibeSettings = JSON.stringify(buildSettings(safeObject(settingsData)));
-
-    const habitsData = parseBackupJSONField(data, 'vibeHabits', []);
-    if (habitsData !== null) normalized.vibeHabits = JSON.stringify(safeArray(habitsData).map(h => ({
-        id: Number.isFinite(Number(h && h.id)) ? Number(h.id) : Date.now(),
-        text: String(h && h.text || '').startsWith(HABIT_PREFIX) ? String(h.text) : HABIT_PREFIX + toTitleCase(String(h && h.text || '').replace(HABIT_PREFIX, '').trim())
-    })).filter(h => h.text.trim() !== HABIT_PREFIX.trim()));
-
-    const examsData = parseBackupJSONField(data, 'vibeExams', []);
-    if (examsData !== null) normalized.vibeExams = JSON.stringify(safeArray(examsData).map(e => ({
-        id: Number.isFinite(Number(e && e.id)) ? Number(e.id) : Date.now(),
-        name: toTitleCase(String(e && e.name || '').trim()),
-        date: parseDateKey(e && e.date) ? e.date : ''
-    })).filter(e => e.name && e.date));
-
-    const reportsData = parseBackupJSONField(data, 'vibeReports', []);
-    if (reportsData !== null) normalized.vibeReports = JSON.stringify(safeArray(reportsData).filter(r => Number.isFinite(Number(r && r.id))));
-
-    ['month', 'year'].forEach(key => {
-        const goals = parseBackupJSONField(data, key, []);
-        if (goals !== null) normalized[key] = JSON.stringify(normalizeGoalList(goals));
-    });
-
-    const navOrder = parseBackupJSONField(data, 'vibeNavOrder', []);
-    if (navOrder !== null) normalized.vibeNavOrder = JSON.stringify(safeArray(navOrder).filter(id => /^nav-[a-z-]+$/.test(String(id))));
-
-    normalized.vibeUpdatedAt = new Date().toISOString();
-    return normalized;
 }
 
 function importBackup(event) {
@@ -1744,8 +1548,10 @@ function importBackup(event) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            const normalized = normalizeBackupPayload(data);
-            Object.entries(normalized).forEach(([k, value]) => safeSetStorage(k, value));
+            const keys = ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'];
+            keys.forEach(k => { 
+                if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, data[k] || ''); 
+            });
             hydratePlannerState(); renderApp(true); scheduleSyncToFirebase();
             alert('Planner data restored.');
         } catch (err) { alert("Invalid backup file."); }
