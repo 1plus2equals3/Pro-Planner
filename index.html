@@ -41,6 +41,14 @@
             
             <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)" style="font-size: 1.1rem; padding: 4px 10px;">⋮</button>
             <div class="dropdown-menu" id="dataDropdown">
+                <button class="dropdown-item" onclick="openCommandPalette()">COMMAND PALETTE</button>
+                <button class="dropdown-item" onclick="openToolModal('brief')">TODAY BRIEF</button>
+                <button class="dropdown-item" onclick="openToolModal('search')">SEARCH TASKS</button>
+                <button class="dropdown-item" onclick="openToolModal('calendar')">CALENDAR VIEW</button>
+                <button class="dropdown-item" onclick="openToolModal('priority')">PRIORITY DASHBOARD</button>
+                <button class="dropdown-item" onclick="openToolModal('recurring')">RECURRING TASKS</button>
+                <button class="dropdown-item" onclick="openToolModal('templates')">TEMPLATES</button>
+                <button class="dropdown-item" onclick="openToolModal('health')">DATA HEALTH</button>
                 <button class="dropdown-item" onclick="exportBackup()">💾 BACKUP DATA</button>
                 <button class="dropdown-item" onclick="document.getElementById('importFile').click()">📂 RESTORE DATA</button>
             </div>
@@ -242,6 +250,34 @@
         <h2 id="reportModalTitle">📊 MONTHLY REPORT</h2>
         <div id="reportModalContent" style="display:flex; flex-direction:column; gap:20px; padding-right: 10px;"></div>
         <button class="action-btn" onclick="closeModal('reportModal')" style="width:100%; margin-top: 15px;">CLOSE REPORT</button>
+    </div>
+</div>
+
+<div id="toolModal" class="modal-overlay">
+    <div class="modal-card tool-modal-card">
+        <h2 id="toolModalTitle">TOOLS</h2>
+        <div id="toolModalContent" class="tool-modal-content"></div>
+        <button class="action-btn" onclick="closeModal('toolModal')" style="width:100%; margin-top: 15px;">CLOSE</button>
+    </div>
+</div>
+
+<div id="commandModal" class="modal-overlay">
+    <div class="modal-card tool-modal-card">
+        <h2>COMMAND PALETTE</h2>
+        <input type="text" id="commandInput" placeholder="TYPE A COMMAND..." oninput="renderCommandPalette()" onkeydown="handleCommandKey(event)" style="width:100%; margin-bottom: 14px;">
+        <div id="commandResults" class="tool-modal-content"></div>
+        <button class="action-btn" onclick="closeModal('commandModal')" style="width:100%; margin-top: 15px;">CLOSE</button>
+    </div>
+</div>
+
+<div id="taskNotesModal" class="modal-overlay">
+    <div class="modal-card">
+        <h2>TASK NOTES</h2>
+        <textarea id="taskNotesInput" placeholder="Add context, links, checklist notes, or constraints..." style="width:100%; min-height: 180px; resize: vertical;"></textarea>
+        <div class="tool-actions">
+            <button class="add-btn" onclick="saveTaskNote()">SAVE NOTE</button>
+            <button class="action-btn" onclick="closeModal('taskNotesModal')">CLOSE</button>
+        </div>
     </div>
 </div>
 

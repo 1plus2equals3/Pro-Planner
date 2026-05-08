@@ -20,6 +20,8 @@ let syncDebounceTimer = null;
 let isApplyingRemoteData = false;
 let deferredInstallPrompt = null;
 let lastFocusedElement = null;
+let currentTaskNoteRef = null;
+let undoAction = null;
 
 function toTitleCase(str) {
     if (!str) return "";
@@ -199,6 +201,9 @@ async function syncToFirebase() {
             reports: JSON.stringify(reports),
             trackedExams: JSON.stringify(trackedExams),
             habits: JSON.stringify(habitBlueprint),
+            recurringTasks: JSON.stringify(recurringTasks),
+            templates: JSON.stringify(plannerTemplates),
+            focusLog: JSON.stringify(focusLog),
             settings: JSON.stringify(settings),
             monthGoals: localStorage.getItem('month') || '[]',
             yearGoals: localStorage.getItem('year') || '[]',
@@ -226,6 +231,9 @@ async function loadDataFromFirebase() {
             reports: 'vibeReports',
             trackedExams: 'vibeExams',
             habits: 'vibeHabits',
+            recurringTasks: 'vibeRecurringTasks',
+            templates: 'vibeTemplates',
+            focusLog: 'vibeFocusLog',
             settings: 'vibeSettings',
             monthGoals: 'month',
             yearGoals: 'year'
@@ -258,6 +266,9 @@ let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
 let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
+let recurringTasks = safeArray(safeReadJSON('vibeRecurringTasks', []));
+let plannerTemplates = safeArray(safeReadJSON('vibeTemplates', []));
+let focusLog = safeArray(safeReadJSON('vibeFocusLog', []));
 
 let parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
 let settings = buildSettings(parsedSettings);
@@ -282,6 +293,9 @@ function hydratePlannerState() {
     reports = safeArray(safeReadJSON('vibeReports', []));
     trackedExams = safeArray(safeReadJSON('vibeExams', []));
     habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
+    recurringTasks = safeArray(safeReadJSON('vibeRecurringTasks', []));
+    plannerTemplates = safeArray(safeReadJSON('vibeTemplates', []));
+    focusLog = safeArray(safeReadJSON('vibeFocusLog', []));
     parsedSettings = safeObject(safeReadJSON('vibeSettings', {}));
     settings = buildSettings(parsedSettings);
 }
@@ -310,6 +324,7 @@ function renderApp(fromSync = false) {
     setRandomQuote();
     applySettings();
     checkRollover(); 
+    applyRecurringTasksToPlanner();
     calculateStreak(); 
     renderReports();
     renderHabitBlueprint();
@@ -717,6 +732,7 @@ function toggleTimer() {
                 clearInterval(timerInterval); isRunning = false; btn.innerText = "START";
                 runConfetti({ particleCount: 150, spread: 80 }); playAlarm();
                 let msg = currentMode === 'work' ? settings.workMsg : settings.breakMsg;
+                if (currentMode === 'work') logFocusSession(settings.workTime || 25);
                 showNotification("TIMER FINISHED", msg);
                 setTimerMode(currentMode === 'work' ? 'break' : 'work');
             }
@@ -905,6 +921,7 @@ function createDay(instant = false) {
     const date = document.getElementById('datePicker').value; if(!date || dailyData[date]) return;
     dailyData[date] = []; 
     habitBlueprint.forEach(h => { dailyData[date].push({ text: h.text, priority: 'prio-med', done: false }); });
+    addRecurringTasksForDate(date);
     save(); const container = document.getElementById('daily-container');
     container.innerHTML = ''; Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
     setTimeout(() => { 
@@ -922,6 +939,7 @@ function createMonth() {
         if (!dailyData[dateStr]) { 
             dailyData[dateStr] = []; 
             habitBlueprint.forEach(h => { dailyData[dateStr].push({ text: h.text, priority: 'prio-med', done: false }); });
+            addRecurringTasksForDate(dateStr);
             changed = true; 
         }
     }
@@ -942,7 +960,7 @@ function createTaskElement(date, task, idx) {
     const todayStr = dateKeyFromLocal(new Date());
     const li = document.createElement('li'); 
     
-    if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
+    if (!task.dismissed && (task.rolledOver || (date < todayStr && !task.done))) li.classList.add('missed-task');
     
     li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
     li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
@@ -988,7 +1006,16 @@ function createTaskElement(date, task, idx) {
     }
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
-    const displayText = task.rolledOver ? '❌ Missed: ' + task.text : task.text;
+    const isMissed = !task.dismissed && (task.rolledOver || (date < todayStr && !task.done));
+    const displayText = isMissed ? '❌ Missed: ' + task.text : task.text;
+    const noteClass = task.note ? 'has-note' : '';
+    const missedActionsHTML = isMissed ? `
+        <div class="task-quick-actions">
+            <button onclick="rescheduleTask('${date}', ${idx}, 0)">TODAY</button>
+            <button onclick="rescheduleTask('${date}', ${idx}, 1)">TOMORROW</button>
+            <button onclick="dismissMissedTask('${date}', ${idx})">DISMISS</button>
+        </div>
+    ` : '';
     
     li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
@@ -1000,8 +1027,10 @@ function createTaskElement(date, task, idx) {
                 ${escapeHTML(displayText)}
             </span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
+            <button class="task-note-btn ${noteClass}" onclick="openTaskNote('${date}', ${idx})" title="Task Notes">NOTE</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
         </div>
+        ${missedActionsHTML}
         ${subtasksHTML}
         <div class="subtask-input-container" id="st-in-cont-${date}-${idx}">
             <input type="text" class="subtask-input" id="st-in-${date}-${idx}" placeholder="NEW SUBTASK..." onkeydown="if(event.key==='Enter') addSubtask('${date}', ${idx})">
@@ -1112,6 +1141,7 @@ function handleDropDay(e) {
         const toUl = document.getElementById(`list-${targetDate}`);
         toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
         updateProgress(targetDate); calculateStreak();
+        if (sourceDate !== targetDate) notifyUser('TASK MOVED', `Moved to ${targetDate}.`, 'success');
     }
     return false;
 }
@@ -1137,6 +1167,7 @@ function handleDropUl(e, targetDate) {
         const toUl = document.getElementById(`list-${targetDate}`);
         toUl.innerHTML = ''; dailyData[targetDate].forEach((t, i) => renderTask(targetDate, t, i));
         updateProgress(targetDate); calculateStreak();
+        if (sourceDate !== targetDate) notifyUser('TASK MOVED', `Moved to ${targetDate}.`, 'success');
     }
 }
 
@@ -1222,8 +1253,15 @@ function handleCheck(date, idx, checkboxElement) {
 }
 
 function removeSpecificTask(date, idx) { 
+    const removed = dailyData[date][idx];
     dailyData[date].splice(idx, 1); const ul = document.getElementById(`list-${date}`); ul.innerHTML = '';
     dailyData[date].forEach((t, i) => renderTask(date, t, i)); updateProgress(date); save(); calculateStreak(); 
+    setUndoAction('TASK DELETED', 'Restore this task?', () => {
+        if (!dailyData[date]) dailyData[date] = [];
+        dailyData[date].splice(Math.min(idx, dailyData[date].length), 0, removed);
+        rerenderDay(date);
+        save(); calculateStreak();
+    });
 }
 
 function removeDay(date) { 
@@ -1600,7 +1638,7 @@ function renderExams() {
             return `
             <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
                 <div><div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(exam.name)}</div><div style="font-size: 0.7rem; opacity: 0.7;">${escapeHTML(exam.examDateStr)}</div></div>
-                <div style="display: flex; align-items: center; gap: 15px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
+                <div style="display: flex; align-items: center; gap: 10px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="mini-tool-btn" onclick="generateExamStudyPlan(${exam.id})">PLAN</button><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
             </div>`;
         }).join('');
     } else if (aced.length === 0) {
@@ -1608,6 +1646,440 @@ function renderExams() {
     }
 
     container.innerHTML = html;
+}
+
+function rerenderDay(date) {
+    const ul = document.getElementById(`list-${date}`);
+    if (ul && dailyData[date]) {
+        ul.innerHTML = '';
+        sortTasks(date);
+        dailyData[date].forEach((t, i) => renderTask(date, t, i));
+        updateProgress(date);
+    } else if (dailyData[date]) {
+        const container = document.getElementById('daily-container');
+        if (container) {
+            container.innerHTML = '';
+            Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
+        }
+    }
+}
+
+function setUndoAction(title, message, action) {
+    undoAction = action;
+    const region = document.getElementById('toastRegion');
+    if (!region) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast warn undo-toast';
+    toast.innerHTML = `<strong>${escapeHTML(title)}</strong><span>${escapeHTML(message)}</span><button onclick="runUndoAction()">UNDO</button>`;
+    region.appendChild(toast);
+    setTimeout(() => {
+        if (toast.isConnected) {
+            toast.style.opacity = '0';
+            toast.style.transform = 'translateY(8px)';
+            setTimeout(() => toast.remove(), 200);
+        }
+        undoAction = null;
+    }, 7000);
+}
+
+function runUndoAction() {
+    if (typeof undoAction === 'function') undoAction();
+    undoAction = null;
+    document.querySelectorAll('.undo-toast').forEach(t => t.remove());
+    notifyUser('RESTORED', 'The last action was undone.', 'success');
+}
+
+function openTaskNote(date, idx) {
+    currentTaskNoteRef = { date, idx };
+    const input = document.getElementById('taskNotesInput');
+    if (input) input.value = dailyData[date] && dailyData[date][idx] ? (dailyData[date][idx].note || '') : '';
+    openModal('taskNotesModal');
+}
+
+function saveTaskNote() {
+    if (!currentTaskNoteRef) return;
+    const { date, idx } = currentTaskNoteRef;
+    if (!dailyData[date] || !dailyData[date][idx]) return;
+    dailyData[date][idx].note = document.getElementById('taskNotesInput').value.trim();
+    save();
+    updateTaskElement(date, idx);
+    closeModal('taskNotesModal');
+    notifyUser('NOTE SAVED', 'Task context updated.', 'success');
+}
+
+function rescheduleTask(sourceDate, idx, offsetDays) {
+    if (!dailyData[sourceDate] || !dailyData[sourceDate][idx]) return;
+    const target = new Date();
+    target.setDate(target.getDate() + offsetDays);
+    const targetDate = dateKeyFromLocal(target);
+    if (!dailyData[targetDate]) dailyData[targetDate] = [];
+    const [task] = dailyData[sourceDate].splice(idx, 1);
+    task.rolledOver = false;
+    task.done = false;
+    dailyData[targetDate].push(task);
+    save();
+    rerenderDay(sourceDate);
+    rerenderDay(targetDate);
+    calculateStreak();
+    notifyUser('RESCHEDULED', `Moved to ${targetDate}.`, 'success');
+}
+
+function dismissMissedTask(date, idx) {
+    if (!dailyData[date] || !dailyData[date][idx]) return;
+    dailyData[date][idx].rolledOver = false;
+    dailyData[date][idx].dismissed = true;
+    save();
+    updateTaskElement(date, idx);
+    notifyUser('DISMISSED', 'Missed state removed for this task.', 'success');
+}
+
+function recurringMatchesDate(rule, dateStr) {
+    const d = parseLocalDate(dateStr);
+    if (Number.isNaN(d.getTime())) return false;
+    const day = d.getDay();
+    if (rule.startDate && dateStr < rule.startDate) return false;
+    if (rule.frequency === 'daily') return true;
+    if (rule.frequency === 'weekdays') return day >= 1 && day <= 5;
+    if (rule.frequency === 'weekly') return day === safeNumber(rule.weekday, 1);
+    if (rule.frequency === 'custom') return safeArray(rule.days).map(Number).includes(day);
+    return false;
+}
+
+function addRecurringTasksForDate(dateStr) {
+    if (!dailyData[dateStr]) dailyData[dateStr] = [];
+    recurringTasks.filter(rule => rule.active !== false && recurringMatchesDate(rule, dateStr)).forEach(rule => {
+        if (!dailyData[dateStr].some(t => t.recurringId === rule.id || t.text === rule.text)) {
+            dailyData[dateStr].push({ text: rule.text, priority: rule.priority || 'prio-med', done: false, recurringId: rule.id });
+        }
+    });
+}
+
+function applyRecurringTasksToPlanner() {
+    let changed = false;
+    Object.keys(dailyData).forEach(dateStr => {
+        const before = dailyData[dateStr].length;
+        addRecurringTasksForDate(dateStr);
+        if (dailyData[dateStr].length !== before) changed = true;
+    });
+    if (changed) save();
+}
+
+function saveRecurringTasks() {
+    localStorage.setItem('vibeRecurringTasks', JSON.stringify(recurringTasks));
+    scheduleSyncToFirebase();
+}
+
+function addRecurringTask() {
+    const text = toTitleCase(document.getElementById('recurringText').value.trim());
+    if (!text) return;
+    const frequency = document.getElementById('recurringFrequency').value;
+    const days = [...document.querySelectorAll('.recurring-day:checked')].map(cb => Number(cb.value));
+    recurringTasks.push({
+        id: Date.now(),
+        text,
+        frequency,
+        days,
+        weekday: days.length ? days[0] : new Date().getDay(),
+        priority: document.getElementById('recurringPriority').value,
+        startDate: document.getElementById('recurringStart').value || dateKeyFromLocal(new Date()),
+        active: true
+    });
+    saveRecurringTasks();
+    applyRecurringTasksToPlanner();
+    openToolModal('recurring');
+}
+
+function removeRecurringTask(id) {
+    recurringTasks = recurringTasks.filter(r => Number(r.id) !== Number(id));
+    saveRecurringTasks();
+    openToolModal('recurring');
+}
+
+function logFocusSession(minutes) {
+    focusLog.push({ id: Date.now(), date: dateKeyFromLocal(new Date()), minutes: safeNumber(minutes, 25), mode: 'work' });
+    localStorage.setItem('vibeFocusLog', JSON.stringify(focusLog.slice(-500)));
+    scheduleSyncToFirebase();
+}
+
+function getTaskRows() {
+    const rows = [];
+    Object.keys(dailyData).sort().forEach(date => {
+        safeArray(dailyData[date]).forEach((task, idx) => rows.push({ date, task, idx }));
+    });
+    return rows;
+}
+
+function openToolModal(type) {
+    const title = document.getElementById('toolModalTitle');
+    const content = document.getElementById('toolModalContent');
+    if (!title || !content) return;
+    const renderers = {
+        brief: renderTodayBriefTool,
+        search: renderSearchTool,
+        calendar: renderCalendarTool,
+        priority: renderPriorityTool,
+        recurring: renderRecurringTool,
+        templates: renderTemplatesTool,
+        health: renderHealthTool
+    };
+    title.innerText = ({
+        brief: 'TODAY BRIEF',
+        search: 'SEARCH TASKS',
+        calendar: 'CALENDAR VIEW',
+        priority: 'PRIORITY DASHBOARD',
+        recurring: 'RECURRING TASKS',
+        templates: 'TEMPLATES',
+        health: 'DATA HEALTH'
+    })[type] || 'TOOLS';
+    content.innerHTML = renderers[type] ? renderers[type]() : '';
+    openModal('toolModal');
+}
+
+function renderTodayBriefTool() {
+    const today = dateKeyFromLocal(new Date());
+    const tasks = safeArray(dailyData[today]);
+    const pending = tasks.filter(t => !t.done);
+    const high = pending.filter(t => t.priority === 'prio-high');
+    const timed = pending.filter(t => t.startTime).sort((a, b) => a.startTime.localeCompare(b.startTime))[0];
+    const focusToday = focusLog.filter(f => f.date === today).reduce((sum, f) => sum + safeNumber(f.minutes), 0);
+    const nextExam = trackedExams.map(exam => {
+        const examDate = parseLocalDate(exam.date);
+        const base = parseLocalDate(today);
+        return { ...exam, diff: Math.round((examDate - base) / 86400000) };
+    }).filter(e => e.diff >= 0).sort((a, b) => a.diff - b.diff)[0];
+    return `
+        <div class="metric-grid">
+            <div><strong>${pending.length}</strong><span>Pending</span></div>
+            <div><strong>${high.length}</strong><span>High Priority</span></div>
+            <div><strong>${focusToday}m</strong><span>Focus Today</span></div>
+            <div><strong>${getDailyScore(today) ?? 0}%</strong><span>Progress</span></div>
+        </div>
+        <div class="tool-list">
+            <div><b>Next timed task</b><span>${timed ? `${escapeHTML(timed.text)} at ${formatTime12h(timed.startTime)}` : 'No timed task pending.'}</span></div>
+            <div><b>Closest exam</b><span>${nextExam ? `${escapeHTML(nextExam.name)} - ${nextExam.diff} day(s)` : 'No upcoming exam.'}</span></div>
+        </div>
+    `;
+}
+
+function renderSearchTool() {
+    return `
+        <div class="tool-actions">
+            <input id="taskSearchInput" type="text" placeholder="SEARCH TASKS..." oninput="runTaskSearch()" style="flex:1;">
+            <select id="taskSearchFilter" onchange="runTaskSearch()">
+                <option value="all">ALL</option>
+                <option value="pending">PENDING</option>
+                <option value="done">DONE</option>
+                <option value="missed">MISSED</option>
+                <option value="high">HIGH</option>
+                <option value="timed">TIMED</option>
+            </select>
+        </div>
+        <div id="taskSearchResults" class="tool-list">${renderTaskSearchResults('', 'all')}</div>
+    `;
+}
+
+function runTaskSearch() {
+    document.getElementById('taskSearchResults').innerHTML = renderTaskSearchResults(
+        document.getElementById('taskSearchInput').value,
+        document.getElementById('taskSearchFilter').value
+    );
+}
+
+function renderTaskSearchResults(query, filter) {
+    const today = dateKeyFromLocal(new Date());
+    const q = String(query || '').trim().toLowerCase();
+    const rows = getTaskRows().filter(({ date, task }) => {
+        if (q && !String(task.text || '').toLowerCase().includes(q) && !String(task.note || '').toLowerCase().includes(q)) return false;
+        if (filter === 'pending') return !task.done;
+        if (filter === 'done') return task.done;
+        if (filter === 'missed') return date < today && !task.done;
+        if (filter === 'high') return task.priority === 'prio-high';
+        if (filter === 'timed') return !!task.startTime;
+        return true;
+    }).slice(0, 80);
+    if (rows.length === 0) return `<p class="empty-state">No matching tasks.</p>`;
+    return rows.map(({ date, task }) => `
+        <div onclick="jumpToDate('${date}')">
+            <b>${escapeHTML(task.text)}</b>
+            <span>${date} ${task.startTime ? `- ${formatTime12h(task.startTime)}` : ''} ${task.done ? '- DONE' : ''}</span>
+        </div>
+    `).join('');
+}
+
+function jumpToDate(date) {
+    closeModal('toolModal');
+    const card = document.getElementById(`card-${date}`);
+    if (card) card.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+}
+
+function renderCalendarTool() {
+    const selected = document.getElementById('monthPicker').value || dateKeyFromLocal(new Date()).slice(0, 7);
+    const [year, month] = selected.split('-').map(Number);
+    const days = new Date(year, month, 0).getDate();
+    let cells = '';
+    for (let day = 1; day <= days; day++) {
+        const date = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+        const score = getDailyScore(date);
+        cells += `<button onclick="jumpToDate('${date}')" class="${date === dateKeyFromLocal(new Date()) ? 'active' : ''}"><b>${day}</b><span>${score === null ? '-' : score + '%'}</span></button>`;
+    }
+    return `<div class="calendar-grid">${cells}</div>`;
+}
+
+function renderPriorityTool() {
+    const rows = getTaskRows().filter(({ task }) => task.priority === 'prio-high' && !task.done).slice(0, 80);
+    if (rows.length === 0) return `<p class="empty-state">No open high-priority tasks.</p>`;
+    return `<div class="tool-list">${rows.map(({ date, task }) => `
+        <div onclick="jumpToDate('${date}')"><b>${escapeHTML(task.text)}</b><span>${date}${task.startTime ? ` - ${formatTime12h(task.startTime)}` : ''}</span></div>
+    `).join('')}</div>`;
+}
+
+function renderRecurringTool() {
+    const today = dateKeyFromLocal(new Date());
+    return `
+        <div class="tool-actions stacked">
+            <input id="recurringText" type="text" placeholder="RECURRING TASK...">
+            <div class="tool-actions">
+                <select id="recurringFrequency"><option value="daily">DAILY</option><option value="weekdays">WEEKDAYS</option><option value="weekly">WEEKLY</option><option value="custom">CUSTOM DAYS</option></select>
+                <select id="recurringPriority"><option value="prio-high">HIGH</option><option value="prio-med" selected>MED</option><option value="prio-low">LOW</option></select>
+                <input id="recurringStart" type="date" value="${today}">
+            </div>
+            <div class="day-picker">
+                ${['S','M','T','W','T','F','S'].map((d, i) => `<label><input class="recurring-day" type="checkbox" value="${i}">${d}</label>`).join('')}
+            </div>
+            <button class="add-btn" onclick="addRecurringTask()">ADD RECURRING TASK</button>
+        </div>
+        <div class="tool-list">
+            ${recurringTasks.length ? recurringTasks.map(r => `<div><b>${escapeHTML(r.text)}</b><span>${escapeHTML(r.frequency || 'daily')}</span><button onclick="removeRecurringTask(${Number(r.id)})">REMOVE</button></div>`).join('') : '<p class="empty-state">No recurring tasks yet.</p>'}
+        </div>
+    `;
+}
+
+function renderTemplatesTool() {
+    const today = dateKeyFromLocal(new Date());
+    return `
+        <div class="tool-actions">
+            <input id="templateName" type="text" placeholder="TEMPLATE NAME..." style="flex:1;">
+            <button class="add-btn" onclick="saveTemplateFromToday()">SAVE TODAY</button>
+        </div>
+        <div class="tool-list">
+            ${plannerTemplates.length ? plannerTemplates.map(t => `<div><b>${escapeHTML(t.name)}</b><span>${safeArray(t.tasks).length} task(s)</span><button onclick="applyTemplate(${Number(t.id)})">APPLY</button><button onclick="removeTemplate(${Number(t.id)})">REMOVE</button></div>`).join('') : `<p class="empty-state">No templates. Save ${today} as your first template.</p>`}
+        </div>
+    `;
+}
+
+function saveTemplateFromToday() {
+    const today = dateKeyFromLocal(new Date());
+    const name = toTitleCase(document.getElementById('templateName').value.trim()) || `Template ${plannerTemplates.length + 1}`;
+    const tasks = safeArray(dailyData[today]).map(t => ({ text: t.text, priority: t.priority || 'prio-med', startTime: t.startTime || '', endTime: t.endTime || '', note: t.note || '', subtasks: safeArray(t.subtasks).map(st => ({ text: st.text, done: false })) }));
+    plannerTemplates.push({ id: Date.now(), name, tasks });
+    localStorage.setItem('vibeTemplates', JSON.stringify(plannerTemplates));
+    scheduleSyncToFirebase();
+    openToolModal('templates');
+}
+
+function applyTemplate(id) {
+    const tpl = plannerTemplates.find(t => Number(t.id) === Number(id));
+    const target = document.getElementById('datePicker').value || dateKeyFromLocal(new Date());
+    if (!tpl) return;
+    if (!dailyData[target]) dailyData[target] = [];
+    safeArray(tpl.tasks).forEach(t => dailyData[target].push({ ...t, done: false, subtasks: safeArray(t.subtasks).map(st => ({ ...st, done: false })) }));
+    save();
+    rerenderDay(target);
+    notifyUser('TEMPLATE APPLIED', `Added to ${target}.`, 'success');
+}
+
+function removeTemplate(id) {
+    plannerTemplates = plannerTemplates.filter(t => Number(t.id) !== Number(id));
+    localStorage.setItem('vibeTemplates', JSON.stringify(plannerTemplates));
+    scheduleSyncToFirebase();
+    openToolModal('templates');
+}
+
+function renderHealthTool() {
+    const storageBytes = Object.keys(localStorage).reduce((sum, key) => sum + key.length + String(localStorage.getItem(key) || '').length, 0);
+    const today = dateKeyFromLocal(new Date());
+    return `
+        <div class="metric-grid">
+            <div><strong>${Object.keys(dailyData).length}</strong><span>Days</span></div>
+            <div><strong>${getTaskRows().length}</strong><span>Tasks</span></div>
+            <div><strong>${trackedExams.length}</strong><span>Exams</span></div>
+            <div><strong>${Math.round(storageBytes / 1024)}KB</strong><span>Local Data</span></div>
+        </div>
+        <div class="tool-list">
+            <div><b>Connection</b><span>${navigator.onLine ? 'Online' : 'Offline'}</span></div>
+            <div><b>Cloud sync</b><span>${currentUser ? `Signed in as ${escapeHTML(currentUser.email)}` : 'Paused'}</span></div>
+            <div><b>Today</b><span>${today}</span></div>
+            <div><b>Focus sessions</b><span>${focusLog.length} saved</span></div>
+        </div>
+    `;
+}
+
+function openCommandPalette() {
+    openModal('commandModal');
+    renderCommandPalette();
+    setTimeout(() => document.getElementById('commandInput').focus(), 80);
+}
+
+function commandList() {
+    return [
+        ['Add task today', () => { closeModal('commandModal'); scrollToToday(); const input = document.getElementById(`in-${dateKeyFromLocal(new Date())}`); if (input) input.focus(); }],
+        ['Today brief', () => { closeModal('commandModal'); openToolModal('brief'); }],
+        ['Search tasks', () => { closeModal('commandModal'); openToolModal('search'); }],
+        ['Calendar view', () => { closeModal('commandModal'); openToolModal('calendar'); }],
+        ['Priority dashboard', () => { closeModal('commandModal'); openToolModal('priority'); }],
+        ['Recurring tasks', () => { closeModal('commandModal'); openToolModal('recurring'); }],
+        ['Templates', () => { closeModal('commandModal'); openToolModal('templates'); }],
+        ['Data health', () => { closeModal('commandModal'); openToolModal('health'); }],
+        ['Focus timer', () => { closeModal('commandModal'); openModal('pomodoroModal'); }],
+        ['Backup data', () => { closeModal('commandModal'); exportBackup(); }]
+    ];
+}
+
+function renderCommandPalette() {
+    const q = String(document.getElementById('commandInput')?.value || '').toLowerCase();
+    const results = document.getElementById('commandResults');
+    if (!results) return;
+    const commands = commandList().filter(([label]) => label.toLowerCase().includes(q)).slice(0, 8);
+    results.innerHTML = `<div class="tool-list command-list">${commands.map(([label], i) => `<div onclick="runCommand(${i})"><b>${escapeHTML(label)}</b><span>Open</span></div>`).join('')}</div>`;
+    window.__visibleCommands = commands;
+}
+
+function runCommand(index) {
+    const command = window.__visibleCommands && window.__visibleCommands[index];
+    if (command) command[1]();
+}
+
+function handleCommandKey(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        runCommand(0);
+    }
+}
+
+function generateExamStudyPlan(id) {
+    const exam = trackedExams.find(e => Number(e.id) === Number(id));
+    if (!exam) return;
+    const today = parseLocalDate(dateKeyFromLocal(new Date()));
+    const examDate = parseLocalDate(exam.date);
+    const days = Math.max(1, Math.round((examDate - today) / 86400000));
+    const totalSlots = Math.min(days, 14);
+    for (let i = 0; i < totalSlots; i++) {
+        const d = new Date(today);
+        d.setDate(d.getDate() + i);
+        const key = dateKeyFromLocal(d);
+        if (!dailyData[key]) dailyData[key] = [];
+        const text = `${exam.name} Study Block ${i + 1}`;
+        if (!dailyData[key].some(t => t.text === text)) {
+            dailyData[key].push({ text, priority: i >= totalSlots - 3 ? 'prio-high' : 'prio-med', done: false, note: `Auto-generated study plan for ${exam.name}.` });
+        }
+    }
+    save();
+    const container = document.getElementById('daily-container');
+    if (container) {
+        container.innerHTML = '';
+        Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
+    }
+    notifyUser('STUDY PLAN READY', `Created ${totalSlots} study block(s).`, 'success');
 }
 
 function exportBackup() {
@@ -1622,7 +2094,10 @@ function exportBackup() {
         year: localStorage.getItem('year') || '[]',
         vibeSettings: localStorage.getItem('vibeSettings') || '{}',
         vibeNavOrder: localStorage.getItem('vibeNavOrder') || '[]',
-        vibeHabits: localStorage.getItem('vibeHabits') || '[]'
+        vibeHabits: localStorage.getItem('vibeHabits') || '[]',
+        vibeRecurringTasks: localStorage.getItem('vibeRecurringTasks') || '[]',
+        vibeTemplates: localStorage.getItem('vibeTemplates') || '[]',
+        vibeFocusLog: localStorage.getItem('vibeFocusLog') || '[]'
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = `PRO_PLANNER_BACKUP_${dateKeyFromLocal(new Date())}.json`;
@@ -1642,7 +2117,10 @@ function importBackup(event) {
                 year: '[]',
                 vibeSettings: '{}',
                 vibeNavOrder: '[]',
-                vibeHabits: '[]'
+                vibeHabits: '[]',
+                vibeRecurringTasks: '[]',
+                vibeTemplates: '[]',
+                vibeFocusLog: '[]'
             };
             Object.entries(fallbacks).forEach(([k, fallback]) => { 
                 if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, normalizeStoredJSON(data[k], fallback)); 
@@ -1653,6 +2131,11 @@ function importBackup(event) {
     }; reader.readAsText(file); event.target.value = '';
 }
 document.addEventListener('keydown', function(event) {
+    if (event.ctrlKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        openCommandPalette();
+        return;
+    }
     if (event.ctrlKey && event.key.toLowerCase() === 'n') {
         event.preventDefault(); scrollToToday();
         const todayStr = dateKeyFromLocal(new Date());
