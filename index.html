@@ -3,9 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="PRO PLANNER is an offline-first planner for tasks, goals, habits, exams, focus sessions, and progress tracking.">
     
     <link rel="manifest" href="./manifest.json">
     <link rel="icon" type="image/png" href="./icon.png">
+    <link rel="apple-touch-icon" href="./icon-192.png">
     
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -45,10 +47,12 @@
         </div>
 
         <button class="action-btn accent draggable-nav" id="nav-settings" draggable="true" onclick="openModal('settingsModal')">⚙️ SETTINGS</button>
+        <button class="action-btn draggable-nav hidden" id="installAppBtn" draggable="true" onclick="installApp()">INSTALL</button>
    
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="importBackup(event)">
     </div>
 </header>
+<div id="toastRegion" class="toast-region" aria-live="polite" aria-atomic="true"></div>
 <div class="quote-banner" id="quoteBanner">LOADING MOTIVATION...</div>
 
 <div class="daily-wrapper">

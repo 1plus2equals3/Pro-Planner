@@ -18,6 +18,8 @@ const provider = firebaseAvailable ? new firebase.auth.GoogleAuthProvider() : nu
 let currentUser = null;
 let syncDebounceTimer = null;
 let isApplyingRemoteData = false;
+let deferredInstallPrompt = null;
+let lastFocusedElement = null;
 
 function toTitleCase(str) {
     if (!str) return "";
@@ -38,6 +40,24 @@ function escapeHTML(value) {
 
 function runConfetti(options) {
     if (typeof confetti === 'function') confetti(options);
+}
+
+function showToast(title, message, type = 'info', timeout = 3500) {
+    const region = document.getElementById('toastRegion');
+    if (!region) return;
+    const toast = document.createElement('div');
+    toast.className = `toast ${type}`;
+    toast.innerHTML = `<strong>${escapeHTML(title)}</strong><span>${escapeHTML(message)}</span>`;
+    region.appendChild(toast);
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        setTimeout(() => toast.remove(), 200);
+    }, timeout);
+}
+
+function notifyUser(title, message, type = 'info', timeout = 3500) {
+    showToast(title, message, type, timeout);
 }
 
 function dateKeyFromLocal(date) {
@@ -70,6 +90,18 @@ function safeNumber(value, fallback = 0) {
     return Number.isFinite(number) ? number : fallback;
 }
 
+function clampNumber(value, min, max, fallback) {
+    const number = safeNumber(value, fallback);
+    return Math.min(max, Math.max(min, number));
+}
+
+function parseLocalDate(dateStr) {
+    if (typeof dateStr !== 'string') return new Date(NaN);
+    const [year, month, day] = dateStr.split('-').map(Number);
+    if (!year || !month || !day) return new Date(NaN);
+    return new Date(year, month - 1, day);
+}
+
 function safeReadJSON(key, fallback) {
     try {
         const raw = localStorage.getItem(key);
@@ -88,6 +120,22 @@ function safeArray(value) {
 
 function safeObject(value) {
     return value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+}
+
+function normalizeStoredJSON(value, fallback) {
+    if (typeof value === 'string') {
+        try {
+            JSON.parse(value);
+            return value;
+        } catch (error) {
+            return fallback;
+        }
+    }
+    try {
+        return JSON.stringify(value ?? JSON.parse(fallback));
+    } catch (error) {
+        return fallback;
+    }
 }
 
 function getGoals(type) {
@@ -217,9 +265,9 @@ let settings = buildSettings(parsedSettings);
 function buildSettings(source = {}) {
     return {
         theme: source.theme || '#a29bfe',
-        dim: source.dim !== undefined ? source.dim : 0.6,
-        workTime: source.workTime || 25,
-        breakTime: source.breakTime || 5,
+        dim: clampNumber(source.dim !== undefined ? source.dim : 0.6, 0, 0.9, 0.6),
+        workTime: clampNumber(source.workTime || 25, 1, 120, 25),
+        breakTime: clampNumber(source.breakTime || 5, 1, 60, 5),
         soundEnabled: source.soundEnabled !== undefined ? source.soundEnabled : true,
         soundType: source.soundType || 'classic',
         notificationsEnabled: source.notificationsEnabled || false,
@@ -254,6 +302,11 @@ let appHasRendered = false;
 
 function renderApp(fromSync = false) {
     hydratePlannerState();
+    const todayStr = dateKeyFromLocal(new Date());
+    const datePicker = document.getElementById('datePicker');
+    const monthPicker = document.getElementById('monthPicker');
+    if (datePicker && !datePicker.value) datePicker.value = todayStr;
+    if (monthPicker && !monthPicker.value) monthPicker.value = todayStr.slice(0, 7);
     setRandomQuote();
     applySettings();
     checkRollover(); 
@@ -283,11 +336,15 @@ function renderApp(fromSync = false) {
     appHasRendered = true;
 }
 
-window.onload = () => renderApp();
+window.addEventListener('load', () => {
+    renderApp();
+    initPWAEnhancements();
+}, { once: true });
 
 function setRandomQuote() {
     const quote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
-    document.getElementById('quoteBanner').innerText = `"${quote}"`;
+    const banner = document.getElementById('quoteBanner');
+    if (banner) banner.innerText = `"${quote}"`;
 }
 
 function init3DTilt(card) {
@@ -324,8 +381,8 @@ function checkUpcomingExamNotification() {
     today.setHours(0,0,0,0); 
     
     const upcomingExams = trackedExams.map(exam => {
-        const [year, month, day] = exam.date.split('-');
-        const examDate = new Date(year, month - 1, day);
+        const examDate = parseLocalDate(exam.date);
+        if (Number.isNaN(examDate.getTime())) return;
         const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
         return { ...exam, diffDays };
     }).filter(e => e.diffDays >= 0).sort((a,b) => a.diffDays - b.diffDays);
@@ -365,16 +422,17 @@ function initNavDragDrop() {
     const savedOrder = safeArray(safeReadJSON('vibeNavOrder', []));
     const container = document.getElementById('navControlsRow');
     if (!container) return;
-    if (container.dataset.navReady === 'true') return;
-    container.dataset.navReady = 'true';
-    if (savedOrder) {
+    if (savedOrder.length > 0) {
         savedOrder.forEach(id => {
             const el = document.getElementById(id);
             if (el) container.appendChild(el);
         });
-        container.appendChild(document.getElementById('importFile'));
+        const importFile = document.getElementById('importFile');
+        if (importFile) container.appendChild(importFile);
     }
     document.querySelectorAll('.draggable-nav').forEach(el => {
+        if (el.dataset.dragReady === 'true') return;
+        el.dataset.dragReady = 'true';
         el.addEventListener('dragstart', handleNavDragStart);
         el.addEventListener('dragover', handleNavDragOver);
         el.addEventListener('dragleave', handleNavDragLeave);
@@ -401,6 +459,9 @@ function playAlarm(overrideType = null) {
     if (!settings.soundEnabled && overrideType === null) return;
     try {
         const ctx = new (window.AudioContext || window.webkitAudioContext)();
+        setTimeout(() => {
+            if (ctx.state !== 'closed') ctx.close().catch(() => {});
+        }, 6000);
         const type = overrideType || settings.soundType;
 
         if (type === 'classic') {
@@ -467,7 +528,9 @@ function requestNotificationPermission() {
 function showNotification(title, msg) {
     if (settings.notificationsEnabled && "Notification" in window && Notification.permission === "granted") {
         new Notification(title, { body: msg });
-    } else { alert(title + " - " + msg); }
+    } else {
+        notifyUser(title, msg);
+    }
 }
 
 function setCustomReminder() {
@@ -482,16 +545,26 @@ function setCustomReminder() {
 function openModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
+    lastFocusedElement = document.activeElement;
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
     modal.style.display = 'flex'; void modal.offsetWidth; modal.classList.add('show');
     if(id === 'statsModal') renderStats();
     if(id === 'examModal') renderExams();
     if(id === 'habitsModal') renderHabitBlueprint();
+    setTimeout(() => {
+        const focusTarget = modal.querySelector('input, textarea, select, button, [contenteditable="true"]');
+        if (focusTarget) focusTarget.focus();
+    }, 50);
 }
 
 function closeModal(id) {
     const modal = document.getElementById(id);
     if (!modal) return;
     modal.classList.remove('show'); setTimeout(() => modal.style.display = 'none', 300);
+    if (lastFocusedElement && typeof lastFocusedElement.focus === 'function') {
+        setTimeout(() => lastFocusedElement.focus(), 50);
+    }
 }
 
 function toggleSettingsCheck(inputId) {
@@ -523,7 +596,7 @@ function applySettings() {
     if(hInput) hInput.value = settings.hundredPercentMsg;
     
     document.querySelectorAll('.color-swatch').forEach(s => {
-        if(s.style.background === settings.theme) s.classList.add('active');
+        s.classList.toggle('active', s.style.backgroundColor === settings.theme || s.style.background === settings.theme);
     });
 
     document.getElementById('btnWork').innerText = `WORK (${settings.workTime || 25}m)`;
@@ -544,12 +617,12 @@ function updateDimming() {
 }
 
 function saveSettings() {
-    settings.dim = document.getElementById('bgDimSlider').value;
+    settings.dim = clampNumber(document.getElementById('bgDimSlider').value, 0, 0.9, 0.6);
     
     let newWorkTime = parseInt(document.getElementById('workTimeInput').value);
     let newBreakTime = parseInt(document.getElementById('breakTimeInput').value);
-    settings.workTime = newWorkTime > 0 ? newWorkTime : 25;
-    settings.breakTime = newBreakTime > 0 ? newBreakTime : 5;
+    settings.workTime = clampNumber(newWorkTime, 1, 120, 25);
+    settings.breakTime = clampNumber(newBreakTime, 1, 60, 5);
     
     settings.soundEnabled = document.getElementById('soundToggle').checked;
     settings.soundType = document.getElementById('soundTypeSelect').value;
@@ -653,7 +726,17 @@ function toggleTimer() {
 
 function resetTimer() { setTimerMode(currentMode); }
 
-function save() { localStorage.setItem('vibeProFinal', JSON.stringify(dailyData)); scheduleSyncToFirebase(); }
+function save() {
+    try {
+        localStorage.setItem('vibeProFinal', JSON.stringify(dailyData));
+        scheduleSyncToFirebase();
+        return true;
+    } catch (error) {
+        console.error('Failed to save planner data:', error);
+        notifyUser('SAVE FAILED', 'Browser storage is full or unavailable. Export a backup before closing.', 'error', 6000);
+        return false;
+    }
+}
 
 function calculateStreak() {
     let streak = 0;
@@ -761,6 +844,7 @@ function checkRollover() {
             dailyData[dateStr].forEach(task => {
                 if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
+                    changed = true;
                     if (!dailyData[todayStr]) { 
                         dailyData[todayStr] = []; changed = true; 
                         habitBlueprint.forEach(h => { dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false }); });
@@ -949,7 +1033,7 @@ function renderDailyCard(date) {
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
     card.innerHTML = `
         <div class="card-header">
-            <h3>📅 ${new Date(date).toDateString().toUpperCase()}</h3>
+            <h3>${parseLocalDate(date).toDateString().toUpperCase()}</h3>
             <span id="perc-${date}" style="font-size:0.85rem; opacity:0.9; font-weight:900; color:var(--primary); text-shadow: 0 0 10px var(--primary);">0%</span>
         </div>
         <div class="progress-container"><div class="progress-fill" id="prog-${date}"></div></div>
@@ -976,14 +1060,14 @@ function renderDailyCard(date) {
 }
 
 function addTask(date) {
-    const val = document.getElementById(`in-${date}`).value;
+    const val = document.getElementById(`in-${date}`).value.trim();
     const prio = document.getElementById(`prio-${date}`).value; 
     const stTime = document.getElementById(`st-time-${date}`).value;
     const enTime = document.getElementById(`en-time-${date}`).value;
     
     if(!val) return;
     
-    let newTask = { text: toTitleCase(val.trim()), priority: prio, done: false };
+    let newTask = { text: toTitleCase(val), priority: prio, done: false };
     if (stTime) newTask.startTime = stTime;
     if (enTime) newTask.endTime = enTime;
 
@@ -1151,11 +1235,13 @@ function removeDay(date) {
 function scrollTimeline(amount) { document.getElementById('daily-container').scrollBy({ left: amount, behavior: 'smooth' }); }
 
 function addGoal(type) {
-    const inp = document.getElementById(`in-${type}`); if(!inp.value) return;
+    const inp = document.getElementById(`in-${type}`);
+    const value = inp.value.trim();
+    if(!value) return;
     const saved = getGoals(type);
-    saved.push({text: toTitleCase(inp.value.trim()), done: false}); localStorage.setItem(type, JSON.stringify(saved));
+    saved.push({text: toTitleCase(value), done: false}); localStorage.setItem(type, JSON.stringify(saved));
     scheduleSyncToFirebase();
-    renderGoal(type, toTitleCase(inp.value.trim()), false, saved.length - 1); inp.value = "";
+    renderGoal(type, toTitleCase(value), false, saved.length - 1); inp.value = "";
 }
 
 function renderGoal(type, text, done, idx) {
@@ -1205,7 +1291,7 @@ function manualArchive() {
     let dailyPercents = [];
 
     Object.keys(dailyData).sort().forEach(dateStr => {
-        const d = new Date(dateStr);
+        const d = parseLocalDate(dateStr);
         if (d.getMonth() + 1 === targetMonth && d.getFullYear() === targetYear) {
             daysFound++; 
             let tasksThisDay = dailyData[dateStr];
@@ -1392,7 +1478,7 @@ function renderStats() {
         let d = new Date(); d.setDate(d.getDate() - i); let dStr = dateKeyFromLocal(d);
         let tasks = dailyData[dStr] || []; let total = tasks.length, done = tasks.filter(t => t.done).length;
         let perc = total === 0 ? 0 : Math.round((done/total)*100);
-        chartData.push(perc); labels.push(new Date(dStr).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
+        chartData.push(perc); labels.push(parseLocalDate(dStr).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
         rowsHTML += `
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; margin-bottom: 12px;">
                 <span style="width: 60px;">${labels[6-i]}</span>
@@ -1434,7 +1520,7 @@ function renderStats() {
 function addExam() {
     const name = toTitleCase(document.getElementById('examName').value.trim());
     const date = document.getElementById('examDate').value;
-    if(!name || !date) return;
+    if(!name || !date || Number.isNaN(parseLocalDate(date).getTime())) return;
     trackedExams.push({ id: Date.now(), name, date }); 
     localStorage.setItem('vibeExams', JSON.stringify(trackedExams)); 
     scheduleSyncToFirebase();
@@ -1466,8 +1552,8 @@ function renderExams() {
     trackedExams.forEach(exam => {
         if (!Number.isFinite(Number(exam.id))) return;
         exam.id = Number(exam.id);
-        const [year, month, day] = exam.date.split('-');
-        const examDate = new Date(year, month - 1, day);
+        const examDate = parseLocalDate(exam.date);
+        if (Number.isNaN(examDate.getTime())) return;
         const diffDays = Math.round((examDate - today) / (1000 * 60 * 60 * 24));
         
         exam.diffDays = diffDays;
@@ -1548,9 +1634,18 @@ function importBackup(event) {
     reader.onload = function(e) {
         try {
             const data = JSON.parse(e.target.result);
-            const keys = ['vibeProFinal', 'vibeReports', 'vibeExams', 'month', 'year', 'vibeSettings', 'vibeNavOrder', 'vibeHabits'];
-            keys.forEach(k => { 
-                if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, data[k] || ''); 
+            const fallbacks = {
+                vibeProFinal: '{}',
+                vibeReports: '[]',
+                vibeExams: '[]',
+                month: '[]',
+                year: '[]',
+                vibeSettings: '{}',
+                vibeNavOrder: '[]',
+                vibeHabits: '[]'
+            };
+            Object.entries(fallbacks).forEach(([k, fallback]) => { 
+                if(Object.prototype.hasOwnProperty.call(data, k)) localStorage.setItem(k, normalizeStoredJSON(data[k], fallback)); 
             });
             hydratePlannerState(); renderApp(true); scheduleSyncToFirebase();
             alert('Planner data restored.');
@@ -1566,10 +1661,72 @@ document.addEventListener('keydown', function(event) {
     if (event.key === 'Escape') { document.querySelectorAll('.modal-overlay').forEach(m => { if(m.classList.contains('show')) closeModal(m.id); }); }
 });
 
-if ('serviceWorker' in navigator) {
+function updateInstallButton() {
+    const installBtn = document.getElementById('installAppBtn');
+    if (!installBtn) return;
+    installBtn.classList.toggle('hidden', !deferredInstallPrompt);
+}
+
+async function installApp() {
+    if (!deferredInstallPrompt) {
+        notifyUser('INSTALL UNAVAILABLE', 'Your browser is not offering install right now.', 'warn');
+        return;
+    }
+    deferredInstallPrompt.prompt();
+    const choice = await deferredInstallPrompt.userChoice.catch(() => null);
+    deferredInstallPrompt = null;
+    updateInstallButton();
+    if (choice && choice.outcome === 'accepted') {
+        notifyUser('APP INSTALLING', 'PRO PLANNER is being added to this device.', 'success');
+    }
+}
+
+function initConnectivityWatch() {
+    if (!('onLine' in navigator)) return;
+    const updateStatus = () => {
+        const syncStatus = document.getElementById('syncStatus');
+        if (syncStatus && !currentUser) {
+            syncStatus.innerText = navigator.onLine ? 'Sync is paused.' : 'Offline. Local planner is active.';
+        }
+        notifyUser(navigator.onLine ? 'BACK ONLINE' : 'OFFLINE MODE', navigator.onLine ? 'Cloud sync can resume when you log in.' : 'Changes will stay on this device.', navigator.onLine ? 'success' : 'warn');
+    };
+    window.addEventListener('online', updateStatus);
+    window.addEventListener('offline', updateStatus);
+}
+
+function initInstallPrompt() {
+    window.addEventListener('beforeinstallprompt', (event) => {
+        event.preventDefault();
+        deferredInstallPrompt = event;
+        updateInstallButton();
+    });
+    window.addEventListener('appinstalled', () => {
+        deferredInstallPrompt = null;
+        updateInstallButton();
+        notifyUser('INSTALLED', 'PRO PLANNER is ready from your home screen.', 'success');
+    });
+}
+
+function initPWAEnhancements() {
+    initConnectivityWatch();
+    initInstallPrompt();
+}
+
+if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) {
     window.addEventListener('load', () => {
         navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker Registered! 🚀', reg))
+            .then(reg => {
+                console.log('Service Worker Registered!', reg);
+                reg.addEventListener('updatefound', () => {
+                    const worker = reg.installing;
+                    if (!worker) return;
+                    worker.addEventListener('statechange', () => {
+                        if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+                            notifyUser('UPDATE READY', 'Reload the app to use the latest version.', 'success', 7000);
+                        }
+                    });
+                });
+            })
             .catch(err => console.log('Service Worker failed! ❌', err));
     });
 }

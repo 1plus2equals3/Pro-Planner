@@ -1,4 +1,4 @@
-const CACHE_NAME = 'pro-planner-v7';
+const CACHE_NAME = 'pro-planner-v8';
 const ASSETS = [
   './',
   './index.html',
@@ -11,18 +11,16 @@ const ASSETS = [
   './icon-512.png'
 ];
 
-// 1. Install Event: Saari files ko cache mein daalo
 self.addEventListener('install', (e) => {
   console.log('[Service Worker] Installing New Version:', CACHE_NAME);
-  self.skipWaiting(); // Naye version ko wait nahi karwayega, turant install karega
+  self.skipWaiting();
   e.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(ASSETS);
+      return Promise.allSettled(ASSETS.map((asset) => cache.add(asset)));
     })
   );
 });
 
-// 2. Activate Event: Purane caches ko delete karo (Auto-Clean)
 self.addEventListener('activate', (e) => {
   console.log('[Service Worker] Activating & Cleaning Old Caches...');
   e.waitUntil(
@@ -35,19 +33,20 @@ self.addEventListener('activate', (e) => {
       }));
     })
   );
-  return self.clients.claim(); // Turant control le lega saare tabs ka
+  return self.clients.claim();
 });
 
-// 3. Fetch Event: Offline support ke liye
 self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
+  const requestUrl = new URL(e.request.url);
+  if (!['http:', 'https:'].includes(requestUrl.protocol)) return;
 
   e.respondWith(
     caches.match(e.request).then((response) => {
       if (response) return response;
 
       return fetch(e.request).then((networkResponse) => {
-        if (networkResponse && networkResponse.ok) {
+        if (networkResponse && networkResponse.ok && requestUrl.origin === self.location.origin) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => cache.put(e.request, responseClone));
         }

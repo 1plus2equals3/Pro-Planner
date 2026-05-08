@@ -2,12 +2,16 @@
   "id": "/Pro-Planner/",
   "name": "PRO PLANNER",
   "short_name": "Planner",
+  "lang": "en",
+  "dir": "ltr",
   "description": "A fast offline-first planner for daily tasks, goals, exams, focus sessions, habits, and progress tracking.",
   "start_url": "./index.html?app=new",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
   "background_color": "#050505",
   "theme_color": "#a29bfe",
+  "prefer_related_applications": false,
   "categories": ["productivity", "education", "utilities"],
   "icons": [
     {
