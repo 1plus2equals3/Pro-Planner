@@ -20,7 +20,7 @@ let syncDebounceTimer = null;
 let isApplyingRemoteData = false;
 let deferredInstallPrompt = null;
 let lastFocusedElement = null;
-let currentTaskNoteRef = null;
+let currentDayNoteDate = null;
 let undoAction = null;
 
 function toTitleCase(str) {
@@ -298,6 +298,7 @@ async function syncToFirebase() {
     try {
         const payload = {
             dailyData: JSON.stringify(dailyData),
+            dailyNotes: JSON.stringify(dailyNotes),
             reports: JSON.stringify(reports),
             trackedExams: JSON.stringify(trackedExams),
             habits: JSON.stringify(habitBlueprint),
@@ -328,6 +329,7 @@ async function loadDataFromFirebase() {
         const data = snapshot.val() || {};
         const fieldMap = {
             dailyData: 'vibeProFinal',
+            dailyNotes: 'vibeDailyNotes',
             reports: 'vibeReports',
             trackedExams: 'vibeExams',
             habits: 'vibeHabits',
@@ -343,7 +345,7 @@ async function loadDataFromFirebase() {
         isApplyingRemoteData = true;
         Object.entries(fieldMap).forEach(([remoteKey, localKey]) => {
             if (!Object.prototype.hasOwnProperty.call(data, remoteKey)) return;
-            const fallback = localKey === 'vibeProFinal' || localKey === 'vibeSettings' ? '{}' : '[]';
+            const fallback = localKey === 'vibeProFinal' || localKey === 'vibeDailyNotes' || localKey === 'vibeSettings' ? '{}' : '[]';
             const value = data[remoteKey] || fallback;
             if (value !== localStorage.getItem(localKey)) {
                 localStorage.setItem(localKey, value);
@@ -363,6 +365,7 @@ async function loadDataFromFirebase() {
 }
 
 let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
+let dailyNotes = safeObject(safeReadJSON('vibeDailyNotes', {}));
 let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
@@ -390,6 +393,7 @@ function buildSettings(source = {}) {
 
 function hydratePlannerState() {
     dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
+    dailyNotes = safeObject(safeReadJSON('vibeDailyNotes', {}));
     reports = safeArray(safeReadJSON('vibeReports', []));
     trackedExams = safeArray(safeReadJSON('vibeExams', []));
     habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
@@ -848,6 +852,7 @@ function resetTimer() { setTimerMode(currentMode); }
 function save() {
     try {
         localStorage.setItem('vibeProFinal', JSON.stringify(dailyData));
+        localStorage.setItem('vibeDailyNotes', JSON.stringify(dailyNotes));
         scheduleSyncToFirebase();
         return true;
     } catch (error) {
@@ -1105,7 +1110,6 @@ function createTaskElement(date, task, idx) {
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
     const isMissed = !task.dismissed && (task.rolledOver || (date < todayStr && !task.done));
     const displayText = isMissed ? 'MISSED: ' + task.text : task.text;
-    const noteClass = task.note ? 'has-note' : '';
     const missedActionsHTML = isMissed ? `<div class="missed-status-tag">AUTO-MOVED TO NEXT DAY</div>` : '';
     
     li.innerHTML = `
@@ -1118,7 +1122,6 @@ function createTaskElement(date, task, idx) {
                 ${escapeHTML(displayText)}
             </span>
             <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
-            <button class="task-note-btn ${noteClass}" onclick="openTaskNote('${date}', ${idx})" title="Task Notes">NOTE</button>
             <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
         </div>
         ${missedActionsHTML}
@@ -1151,6 +1154,7 @@ function updateTaskElement(date, idx) {
 function renderDailyCard(date) {
     const todayStr = dateKeyFromLocal(new Date()); const isToday = date === todayStr;
     const card = document.createElement('div'); card.className = `card ${isToday ? 'today-card' : ''}`; card.id = `card-${date}`;
+    const dayNoteClass = dailyNotes[date] ? 'has-note' : '';
     card.innerHTML = `
         <div class="card-header">
             <h3>${parseLocalDate(date).toDateString().toUpperCase()}</h3>
@@ -1173,7 +1177,10 @@ function renderDailyCard(date) {
         </div>
 
         <ul id="list-${date}" ondragover="handleDragOverUl(event)" ondrop="handleDropUl(event, '${date}')" style="min-height: 50px; padding-bottom: 20px;"></ul>
-        <button class="remove-day-btn" onclick="removeDay('${date}')">REMOVE DAY</button>
+        <div class="day-card-footer">
+            <button class="remove-day-btn" onclick="removeDay('${date}')">REMOVE DAY</button>
+            <button class="day-note-btn ${dayNoteClass}" onclick="openDayNote('${date}')" title="Day Notes">NOTE</button>
+        </div>
     `;
     document.getElementById('daily-container').appendChild(card); init3DTilt(card);
     sortTasks(date); dailyData[date].forEach((t, idx) => renderTask(date, t, idx)); updateProgress(date);
@@ -1399,7 +1406,7 @@ function removeSpecificTask(date, idx) {
 
 function removeDay(date) { 
     if(confirm(`Remove entire day: ${date}?`)) {
-        delete dailyData[date]; document.getElementById(`card-${date}`).remove(); save(); calculateStreak(); 
+        delete dailyData[date]; delete dailyNotes[date]; document.getElementById(`card-${date}`).remove(); save(); calculateStreak(); 
     }
 }
 
@@ -1821,22 +1828,24 @@ function runUndoAction() {
     notifyUser('RESTORED', 'The last action was undone.', 'success');
 }
 
-function openTaskNote(date, idx) {
-    currentTaskNoteRef = { date, idx };
+function openDayNote(date) {
+    currentDayNoteDate = date;
     const input = document.getElementById('taskNotesInput');
-    if (input) input.value = dailyData[date] && dailyData[date][idx] ? (dailyData[date][idx].note || '') : '';
+    if (input) input.value = dailyNotes[date] || '';
     openModal('taskNotesModal');
 }
 
-function saveTaskNote() {
-    if (!currentTaskNoteRef) return;
-    const { date, idx } = currentTaskNoteRef;
-    if (!dailyData[date] || !dailyData[date][idx]) return;
-    dailyData[date][idx].note = document.getElementById('taskNotesInput').value.trim();
+function saveDayNote() {
+    if (!currentDayNoteDate) return;
+    const date = currentDayNoteDate;
+    const note = document.getElementById('taskNotesInput').value.trim();
+    if (note) dailyNotes[date] = note;
+    else delete dailyNotes[date];
     save();
-    updateTaskElement(date, idx);
+    const btn = document.querySelector(`#card-${date} .day-note-btn`);
+    if (btn) btn.classList.toggle('has-note', Boolean(note));
     closeModal('taskNotesModal');
-    notifyUser('NOTE SAVED', 'Task context updated.', 'success');
+    notifyUser('NOTE SAVED', 'Day note updated.', 'success');
 }
 
 function rescheduleTask(sourceDate, idx, offsetDays) {
@@ -2220,6 +2229,7 @@ function exportBackup() {
         app: 'PRO_PLANNER',
         exportedAt: new Date().toISOString(),
         vibeProFinal: localStorage.getItem('vibeProFinal') || '{}',
+        vibeDailyNotes: localStorage.getItem('vibeDailyNotes') || '{}',
         vibeReports: localStorage.getItem('vibeReports') || '[]',
         vibeExams: localStorage.getItem('vibeExams') || '[]',
         month: localStorage.getItem('month') || '[]',
@@ -2243,6 +2253,7 @@ function importBackup(event) {
             const data = JSON.parse(e.target.result);
             const fallbacks = {
                 vibeProFinal: '{}',
+                vibeDailyNotes: '{}',
                 vibeReports: '[]',
                 vibeExams: '[]',
                 month: '[]',
