@@ -134,10 +134,18 @@ li:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); borde
 .prio-med { background: var(--med); box-shadow: 0 0 4px var(--med); }
 .prio-low { background: var(--low); box-shadow: 0 0 4px var(--low); }
 
-.task-clock-icon { color: var(--primary); opacity: 0.7; cursor: help; display: flex; align-items: center; justify-content: center; transition: 0.3s; flex-shrink: 0; }
+.task-time-wrap { position: relative; display: flex; align-items: center; flex-shrink: 0; }
+.task-clock-icon { color: var(--primary); opacity: 0.7; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.3s; flex-shrink: 0; background: transparent; border: 0; padding: 0; }
 .task-clock-icon:hover { opacity: 1; filter: drop-shadow(0 0 4px var(--primary)); transform: scale(1.1); }
 li.missed-task .task-clock-icon { color: var(--missed); opacity: 0.6; }
 li.missed-task .task-clock-icon:hover { filter: drop-shadow(0 0 4px var(--missed)); }
+.task-time-editor { display: none; position: absolute; left: 0; top: calc(100% + 8px); min-width: 168px; padding: 10px; border-radius: 8px; background: rgba(12,12,14,0.98); border: 1px solid rgba(255,255,255,0.14); box-shadow: var(--shadow-strong); z-index: 80; }
+.task-time-editor.show { display: grid; gap: 8px; animation: fadeIn 0.15s ease; }
+.task-time-editor label { display: grid; gap: 4px; color: rgba(255,255,255,0.65); font-size: 0.55rem; font-weight: 900; letter-spacing: 1px; }
+.task-time-editor input[type="time"] { width: 100%; box-sizing: border-box; }
+.task-time-editor-actions { display: flex; gap: 6px; }
+.task-time-editor-actions button { flex: 1; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 6px 7px; background: rgba(255,255,255,0.08); color: #fff; font-size: 0.58rem; font-weight: 900; cursor: pointer; }
+.task-time-editor-actions button:first-child { background: var(--primary); color: #000; border-color: transparent; }
 
 /* ⬇️ SOFT GLOW APPLIED: Checkbox Pulse */
 @keyframes checkPulse {
@@ -161,6 +169,7 @@ li.missed-task span.task-text { text-decoration: line-through; text-decoration-c
 .task-quick-actions { display: flex; gap: 6px; padding-left: 50px; margin-top: 8px; flex-wrap: wrap; }
 .task-quick-actions button { background: rgba(255,118,117,0.12); border: 1px solid rgba(255,118,117,0.22); color: var(--missed); border-radius: 6px; padding: 4px 7px; font-size: 0.58rem; font-weight: 900; cursor: pointer; }
 .task-quick-actions button:hover { background: var(--missed); color: #000; }
+.missed-status-tag { align-self: flex-start; margin: 7px 0 2px 34px; padding: 4px 7px; border-radius: 6px; background: rgba(255,118,117,0.1); border: 1px solid rgba(255,118,117,0.22); color: var(--missed); font-size: 0.56rem; font-weight: 900; letter-spacing: 0.6px; }
 
 .remove-day-btn { background: none; border: none; color: rgba(255, 118, 117, 0.5); font-size: 0.65rem; margin-top: 15px; cursor: pointer; align-self: center; font-weight: 900; transition: all 0.3s ease; letter-spacing: 1px;}
 .remove-day-btn:hover { color: rgba(255, 118, 117, 1); text-shadow: 0 0 8px rgba(255, 118, 117, 0.6); transform: scale(1.05);}

@@ -87,6 +87,106 @@ function getDailyScore(dateStr) {
     return Math.round(dailyPercent);
 }
 
+function normalizeTaskLabel(text) {
+    return String(text || '')
+        .replace(/^❌\s*missed:\s*/i, '')
+        .trim()
+        .replace(/\s+/g, ' ')
+        .toLowerCase();
+}
+
+function getNextDateKey(dateStr) {
+    const next = parseLocalDate(dateStr);
+    if (Number.isNaN(next.getTime())) return dateStr;
+    next.setDate(next.getDate() + 1);
+    return dateKeyFromLocal(next);
+}
+
+function cloneTaskForRollover(task) {
+    const clone = {
+        text: task.text,
+        priority: 'prio-high',
+        done: false,
+        stCollapsed: task.stCollapsed || false,
+        rolledFrom: task.rolledFrom || null
+    };
+    if (task.startTime) clone.startTime = task.startTime;
+    if (task.endTime) clone.endTime = task.endTime;
+    if (task.note) clone.note = task.note;
+    if (task.recurringId) clone.recurringId = task.recurringId;
+    if (task.subtasks && task.subtasks.length > 0) {
+        const pendingSubtasks = task.subtasks.filter(st => !st.done);
+        if (pendingSubtasks.length > 0) {
+            clone.subtasks = pendingSubtasks.map(st => ({ text: st.text, done: false }));
+        }
+    }
+    return clone;
+}
+
+function mergeTaskFields(target, incoming) {
+    const priorityRank = { 'prio-high': 3, 'prio-med': 2, 'prio-low': 1 };
+    if ((priorityRank[incoming.priority] || 0) > (priorityRank[target.priority] || 0)) target.priority = incoming.priority;
+    if (!target.startTime && incoming.startTime) target.startTime = incoming.startTime;
+    if (!target.endTime && incoming.endTime) target.endTime = incoming.endTime;
+    if (!target.note && incoming.note) target.note = incoming.note;
+    if (!target.recurringId && incoming.recurringId) target.recurringId = incoming.recurringId;
+    target.rolledOver = Boolean(target.rolledOver || incoming.rolledOver);
+    target.dismissed = Boolean(target.dismissed && incoming.dismissed);
+
+    const mergedSubtasks = [];
+    const seenSubtasks = new Map();
+    [...safeArray(target.subtasks), ...safeArray(incoming.subtasks)].forEach(st => {
+        const key = normalizeTaskLabel(st.text);
+        if (!key) return;
+        if (seenSubtasks.has(key)) {
+            const existing = mergedSubtasks[seenSubtasks.get(key)];
+            existing.done = Boolean(existing.done || st.done);
+        } else {
+            seenSubtasks.set(key, mergedSubtasks.length);
+            mergedSubtasks.push({ text: st.text, done: Boolean(st.done) });
+        }
+    });
+    if (mergedSubtasks.length > 0) {
+        target.subtasks = mergedSubtasks;
+        target.done = mergedSubtasks.every(st => st.done);
+    } else {
+        target.done = Boolean(target.done || incoming.done);
+        delete target.subtasks;
+    }
+}
+
+function normalizeDuplicateTasks(date) {
+    if (!dailyData[date]) return false;
+    const merged = [];
+    const seen = new Map();
+    let changed = false;
+    dailyData[date].forEach(task => {
+        const key = normalizeTaskLabel(task.text);
+        if (!key) return;
+        if (seen.has(key)) {
+            mergeTaskFields(merged[seen.get(key)], task);
+            changed = true;
+        } else {
+            seen.set(key, merged.length);
+            merged.push(task);
+        }
+    });
+    if (changed || merged.length !== dailyData[date].length) dailyData[date] = merged;
+    return changed;
+}
+
+function mergeTaskIntoDate(date, task) {
+    if (!dailyData[date]) dailyData[date] = [];
+    const key = normalizeTaskLabel(task.text);
+    const existingIndex = dailyData[date].findIndex(t => normalizeTaskLabel(t.text) === key);
+    if (existingIndex >= 0) {
+        mergeTaskFields(dailyData[date][existingIndex], task);
+        return true;
+    }
+    dailyData[date].push(task);
+    return true;
+}
+
 function safeNumber(value, fallback = 0) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
@@ -325,6 +425,9 @@ function renderApp(fromSync = false) {
     applySettings();
     checkRollover(); 
     applyRecurringTasksToPlanner();
+    let normalized = false;
+    Object.keys(dailyData).forEach(date => { if (normalizeDuplicateTasks(date)) normalized = true; });
+    if (normalized) save();
     calculateStreak(); 
     renderReports();
     renderHabitBlueprint();
@@ -775,24 +878,13 @@ function calculateStreak() {
 }
 
 function updateProgress(date) {
-    const tasks = dailyData[date] || [];
-    if (tasks.length === 0) {
+    const score = getDailyScore(date);
+    if (score === null) {
         if(document.getElementById(`prog-${date}`)) document.getElementById(`prog-${date}`).style.width = "0%";
         if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = "0%";
         return;
     }
-    let totalPercent = 0;
-    let weightPerTask = 100 / tasks.length;
-    tasks.forEach(task => {
-        if (task.subtasks && task.subtasks.length > 0) {
-            let doneSubtasks = task.subtasks.filter(st => st.done).length;
-            let subtaskRatio = doneSubtasks / task.subtasks.length;
-            totalPercent += (subtaskRatio * weightPerTask);
-        } else {
-            if (task.done) { totalPercent += weightPerTask; }
-        }
-    });
-    const finalPercent = Math.round(totalPercent);
+    const finalPercent = Math.max(0, Math.min(100, score));
     if(document.getElementById(`prog-${date}`)) document.getElementById(`prog-${date}`).style.width = finalPercent + "%";
     if(document.getElementById(`perc-${date}`)) document.getElementById(`perc-${date}`).innerText = finalPercent + "%";
 }
@@ -855,29 +947,23 @@ function renderHabitBlueprint() {
 function checkRollover() {
     const todayStr = dateKeyFromLocal(new Date());
     let changed = false;
-    Object.keys(dailyData).forEach(dateStr => {
+    Object.keys(dailyData).sort().forEach(dateStr => {
         if (dateStr < todayStr) {
             dailyData[dateStr].forEach(task => {
                 if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
                     changed = true;
-                    if (!dailyData[todayStr]) { 
-                        dailyData[todayStr] = []; changed = true; 
-                        habitBlueprint.forEach(h => { dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false }); });
-                    }
                     if (task.text.startsWith("🔄 ")) return;
 
-                    if (!dailyData[todayStr].some(t => t.text === task.text)) {
-                        let newTask = { text: task.text, priority: task.priority || 'prio-low', done: false, stCollapsed: task.stCollapsed || false };
-                        if (task.subtasks && task.subtasks.length > 0) {
-                            let pendingSubtasks = task.subtasks.filter(st => !st.done);
-                            if (pendingSubtasks.length > 0) { newTask.subtasks = pendingSubtasks.map(st => ({ text: st.text, done: false })); }
-                        }
-                        dailyData[todayStr].push(newTask);
-                        changed = true;
-                    }
+                    const targetDate = getNextDateKey(dateStr);
+                    const newTask = cloneTaskForRollover(task);
+                    newTask.rolledFrom = dateStr;
+                    mergeTaskIntoDate(targetDate, newTask);
+                    normalizeDuplicateTasks(targetDate);
+                    changed = true;
                 }
             });
+            if (normalizeDuplicateTasks(dateStr)) changed = true;
         }
     });
 
@@ -892,6 +978,7 @@ function checkRollover() {
 function sortTasks(date) {
     const prioMap = { 'prio-high': 1, 'prio-med': 2, 'prio-low': 3 };
     if(dailyData[date]) { 
+        normalizeDuplicateTasks(date);
         dailyData[date].sort((a, b) => {
             const hasTimeA = !!a.startTime;
             const hasTimeB = !!b.startTime;
@@ -999,23 +1086,27 @@ function createTaskElement(date, task, idx) {
         let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
         
         timeBadgeHTML = `
-            <div class="task-clock-icon" title="${tooltipText}">
-                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            <div class="task-time-wrap">
+                <button class="task-clock-icon" type="button" title="${tooltipText}" onclick="toggleTimeEditor(event, '${date}', ${idx})" aria-label="Edit task time">
+                    <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+                </button>
+                <div class="task-time-editor" id="time-edit-${date}-${idx}" onclick="event.stopPropagation()">
+                    <label>START<input type="time" id="edit-st-time-${date}-${idx}" value="${escapeHTML(task.startTime || '')}"></label>
+                    <label>END<input type="time" id="edit-en-time-${date}-${idx}" value="${escapeHTML(task.endTime || '')}"></label>
+                    <div class="task-time-editor-actions">
+                        <button onclick="saveTaskTime('${date}', ${idx})">SAVE</button>
+                        <button onclick="clearTaskTime('${date}', ${idx})">CLEAR</button>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
     const isMissed = !task.dismissed && (task.rolledOver || (date < todayStr && !task.done));
-    const displayText = isMissed ? '❌ Missed: ' + task.text : task.text;
+    const displayText = isMissed ? 'MISSED: ' + task.text : task.text;
     const noteClass = task.note ? 'has-note' : '';
-    const missedActionsHTML = isMissed ? `
-        <div class="task-quick-actions">
-            <button onclick="rescheduleTask('${date}', ${idx}, 0)">TODAY</button>
-            <button onclick="rescheduleTask('${date}', ${idx}, 1)">TOMORROW</button>
-            <button onclick="dismissMissedTask('${date}', ${idx})">DISMISS</button>
-        </div>
-    ` : '';
+    const missedActionsHTML = isMissed ? `<div class="missed-status-tag">AUTO-MOVED TO NEXT DAY</div>` : '';
     
     li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
@@ -1100,7 +1191,7 @@ function addTask(date) {
     if (stTime) newTask.startTime = stTime;
     if (enTime) newTask.endTime = enTime;
 
-    dailyData[date].push(newTask); 
+    mergeTaskIntoDate(date, newTask);
     sortTasks(date);
     
     const ul = document.getElementById(`list-${date}`); ul.innerHTML = ''; 
@@ -1193,12 +1284,54 @@ function getDuration(start, end) {
     return res.join(' ');
 }
 
+function toggleTimeEditor(event, date, idx) {
+    event.stopPropagation();
+    document.querySelectorAll('.task-time-editor.show').forEach(menu => {
+        if (menu.id !== `time-edit-${date}-${idx}`) menu.classList.remove('show');
+    });
+    const menu = document.getElementById(`time-edit-${date}-${idx}`);
+    if (menu) menu.classList.toggle('show');
+}
+
+function saveTaskTime(date, idx) {
+    if (!dailyData[date] || !dailyData[date][idx]) return;
+    const start = document.getElementById(`edit-st-time-${date}-${idx}`).value;
+    const end = document.getElementById(`edit-en-time-${date}-${idx}`).value;
+    if (!start) {
+        notifyUser('TIME REQUIRED', 'Set a start time or clear the schedule.', 'warn');
+        return;
+    }
+    dailyData[date][idx].startTime = start;
+    if (end) dailyData[date][idx].endTime = end;
+    else delete dailyData[date][idx].endTime;
+    sortTasks(date);
+    save();
+    rerenderDay(date);
+    notifyUser('TIME UPDATED', 'Task schedule changed.', 'success');
+}
+
+function clearTaskTime(date, idx) {
+    if (!dailyData[date] || !dailyData[date][idx]) return;
+    delete dailyData[date][idx].startTime;
+    delete dailyData[date][idx].endTime;
+    sortTasks(date);
+    save();
+    rerenderDay(date);
+    notifyUser('TIME CLEARED', 'Task schedule removed.', 'success');
+}
+
+document.addEventListener('click', () => {
+    document.querySelectorAll('.task-time-editor.show').forEach(menu => menu.classList.remove('show'));
+});
+
 
 function editTask(date, idx, element) {
-    let newText = toTitleCase(element.innerText.replace('❌ Missed: ', '').replace('❌ MISSED: ', '').trim());
+    let newText = toTitleCase(element.innerText.replace(/^❌\s*Missed:\s*/i, '').replace(/^MISSED:\s*/i, '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
-    dailyData[date][idx].text = newText; save(); 
-    updateTaskElement(date, idx); // 🚀 Surgical update
+    dailyData[date][idx].text = newText;
+    normalizeDuplicateTasks(date);
+    save(); 
+    rerenderDay(date);
 }
 
 function cyclePriority(dot, date, idx) {
@@ -1514,8 +1647,7 @@ function renderStats() {
     let chartData = []; let labels = []; let rowsHTML = '';
     for(let i=6; i>=0; i--) {
         let d = new Date(); d.setDate(d.getDate() - i); let dStr = dateKeyFromLocal(d);
-        let tasks = dailyData[dStr] || []; let total = tasks.length, done = tasks.filter(t => t.done).length;
-        let perc = total === 0 ? 0 : Math.round((done/total)*100);
+        let perc = getDailyScore(dStr) ?? 0;
         chartData.push(perc); labels.push(parseLocalDate(dStr).toLocaleDateString('en-US', {weekday: 'short'}).toUpperCase());
         rowsHTML += `
             <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.8rem; margin-bottom: 12px;">
@@ -2236,8 +2368,9 @@ function addSubtask(date, idx) {
     dailyData[date][idx].done = false; 
     dailyData[date][idx].stCollapsed = false; 
     
+    normalizeDuplicateTasks(date);
     save(); 
-    updateTaskElement(date, idx); // 🚀 Surgical update
+    rerenderDay(date);
     updateProgress(date); calculateStreak();
 }
 
