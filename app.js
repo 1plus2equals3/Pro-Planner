@@ -1083,34 +1083,37 @@ function createTaskElement(date, task, idx) {
         subtasksHTML += '</ul>';
     }
 
-    let timeBadgeHTML = '';
-    if (task.startTime) {
-        let duration = getDuration(task.startTime, task.endTime);
-        let timeStr = formatTime12h(task.startTime);
-        if (task.endTime) timeStr += ` - ${formatTime12h(task.endTime)}`;
-        let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
-        
-        timeBadgeHTML = `
-            <div class="task-time-wrap">
-                <button class="task-clock-icon" type="button" title="${tooltipText}" onclick="toggleTimeEditor(event, '${date}', ${idx})" aria-label="Edit task time">
-                    <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
-                </button>
-                <div class="task-time-editor" id="time-edit-${date}-${idx}" onclick="event.stopPropagation()">
-                    <label>START<input type="time" id="edit-st-time-${date}-${idx}" value="${escapeHTML(task.startTime || '')}"></label>
-                    <label>END<input type="time" id="edit-en-time-${date}-${idx}" value="${escapeHTML(task.endTime || '')}"></label>
-                    <div class="task-time-editor-actions">
-                        <button onclick="saveTaskTime('${date}', ${idx})">SAVE</button>
-                        <button onclick="clearTaskTime('${date}', ${idx})">CLEAR</button>
-                    </div>
+    let duration = getDuration(task.startTime, task.endTime);
+    let timeStr = task.startTime ? formatTime12h(task.startTime) : 'Set task time';
+    if (task.startTime && task.endTime) timeStr += ` - ${formatTime12h(task.endTime)}`;
+    let tooltipText = duration ? `${timeStr} (Duration: ${duration})` : timeStr;
+    let timeBadgeHTML = `
+        <div class="task-time-wrap">
+            <button class="task-clock-icon ${task.startTime ? 'has-time' : ''}" type="button" title="${escapeHTML(tooltipText)}" onclick="toggleTimeEditor(event, '${date}', ${idx})" aria-label="Edit task time">
+                <svg viewBox="0 0 24 24" width="15" height="15" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </button>
+            <div class="task-time-editor" id="time-edit-${date}-${idx}" onclick="event.stopPropagation()">
+                <label>START<input type="time" id="edit-st-time-${date}-${idx}" value="${escapeHTML(task.startTime || '')}"></label>
+                <label>END<input type="time" id="edit-en-time-${date}-${idx}" value="${escapeHTML(task.endTime || '')}"></label>
+                <div class="task-time-editor-actions">
+                    <button onclick="saveTaskTime('${date}', ${idx})">SAVE</button>
+                    <button onclick="clearTaskTime('${date}', ${idx})">CLEAR</button>
                 </div>
             </div>
-        `;
-    }
+        </div>
+    `;
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
     const isMissed = !task.dismissed && (task.rolledOver || (date < todayStr && !task.done));
     const displayText = isMissed ? 'MISSED: ' + task.text : task.text;
-    const missedActionsHTML = isMissed ? `<div class="missed-status-tag">AUTO-MOVED TO NEXT DAY</div>` : '';
+    const missedActionsHTML = isMissed ? `
+        <div class="missed-status-tag">${task.rolledFrom ? `ROLLED FROM ${escapeHTML(task.rolledFrom)}` : 'MISSED TASK'}</div>
+        <div class="task-quick-actions">
+            <button onclick="rescheduleTask('${date}', ${idx}, 0)">MOVE TODAY</button>
+            <button onclick="rescheduleTask('${date}', ${idx}, 1)">MOVE TOMORROW</button>
+            <button onclick="dismissMissedTask('${date}', ${idx})">DISMISS</button>
+        </div>
+    ` : '';
     
     li.innerHTML = `
         <div style="display: flex; align-items: center; gap: 10px; width: 100%;">
@@ -1915,14 +1918,24 @@ function addRecurringTask() {
     if (!text) return;
     const frequency = document.getElementById('recurringFrequency').value;
     const days = [...document.querySelectorAll('.recurring-day:checked')].map(cb => Number(cb.value));
+    const startDate = document.getElementById('recurringStart').value || dateKeyFromLocal(new Date());
+    const start = parseLocalDate(startDate);
+    if (frequency === 'custom' && days.length === 0) {
+        notifyUser('DAYS REQUIRED', 'Choose at least one day for a custom recurring task.', 'warn');
+        return;
+    }
+    if (recurringTasks.some(rule => normalizeTaskLabel(rule.text) === normalizeTaskLabel(text) && rule.frequency === frequency && rule.startDate === startDate)) {
+        notifyUser('ALREADY EXISTS', 'That recurring task is already saved.', 'warn');
+        return;
+    }
     recurringTasks.push({
         id: Date.now(),
         text,
         frequency,
         days,
-        weekday: days.length ? days[0] : new Date().getDay(),
+        weekday: days.length ? days[0] : (Number.isNaN(start.getTime()) ? new Date().getDay() : start.getDay()),
         priority: document.getElementById('recurringPriority').value,
-        startDate: document.getElementById('recurringStart').value || dateKeyFromLocal(new Date()),
+        startDate,
         active: true
     });
     saveRecurringTasks();
@@ -2112,6 +2125,10 @@ function saveTemplateFromToday() {
     const today = dateKeyFromLocal(new Date());
     const name = toTitleCase(document.getElementById('templateName').value.trim()) || `Template ${plannerTemplates.length + 1}`;
     const tasks = safeArray(dailyData[today]).map(t => ({ text: t.text, priority: t.priority || 'prio-med', startTime: t.startTime || '', endTime: t.endTime || '', note: t.note || '', subtasks: safeArray(t.subtasks).map(st => ({ text: st.text, done: false })) }));
+    if (tasks.length === 0) {
+        notifyUser('NO TASKS TO SAVE', 'Add at least one task today before saving a template.', 'warn');
+        return;
+    }
     plannerTemplates.push({ id: Date.now(), name, tasks });
     localStorage.setItem('vibeTemplates', JSON.stringify(plannerTemplates));
     scheduleSyncToFirebase();
@@ -2123,7 +2140,10 @@ function applyTemplate(id) {
     const target = document.getElementById('datePicker').value || dateKeyFromLocal(new Date());
     if (!tpl) return;
     if (!dailyData[target]) dailyData[target] = [];
-    safeArray(tpl.tasks).forEach(t => dailyData[target].push({ ...t, done: false, subtasks: safeArray(t.subtasks).map(st => ({ ...st, done: false })) }));
+    safeArray(tpl.tasks).forEach(t => {
+        mergeTaskIntoDate(target, { ...t, done: false, subtasks: safeArray(t.subtasks).map(st => ({ ...st, done: false })) });
+    });
+    sortTasks(target);
     save();
     rerenderDay(target);
     notifyUser('TEMPLATE APPLIED', `Added to ${target}.`, 'success');

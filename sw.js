@@ -1,10 +1,10 @@
-const CACHE_NAME = 'pro-planner-v8';
+const CACHE_NAME = 'pro-planner-v9';
 const ASSETS = [
   './',
   './index.html',
   './index.html?app=new',
-  './style.css',
-  './app.js',
+  './style.css?v=9',
+  './app.js?v=9',
   './manifest.json',
   './icon.png',
   './icon-192.png',
@@ -40,6 +40,19 @@ self.addEventListener('fetch', (e) => {
   if (e.request.method !== 'GET') return;
   const requestUrl = new URL(e.request.url);
   if (!['http:', 'https:'].includes(requestUrl.protocol)) return;
+
+  if (e.request.mode === 'navigate') {
+    e.respondWith(
+      fetch(e.request).then((networkResponse) => {
+        if (networkResponse && networkResponse.ok && requestUrl.origin === self.location.origin) {
+          const responseClone = networkResponse.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put('./index.html', responseClone));
+        }
+        return networkResponse;
+      }).catch(() => caches.match('./index.html'))
+    );
+    return;
+  }
 
   e.respondWith(
     caches.match(e.request).then((response) => {
