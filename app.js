@@ -187,6 +187,18 @@ function mergeTaskIntoDate(date, task) {
     return true;
 }
 
+function addHabitTasksForDate(dateStr) {
+    if (!dailyData[dateStr]) dailyData[dateStr] = [];
+    let changed = false;
+    habitBlueprint.forEach(habit => {
+        if (!dailyData[dateStr].some(task => task.text === habit.text)) {
+            dailyData[dateStr].push({ text: habit.text, priority: 'prio-med', done: false });
+            changed = true;
+        }
+    });
+    return changed;
+}
+
 function safeNumber(value, fallback = 0) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
@@ -866,6 +878,12 @@ function calculateStreak() {
     let streak = 0;
     const cursor = new Date();
     cursor.setHours(0, 0, 0, 0);
+    const todayStr = dateKeyFromLocal(cursor);
+    const todayScore = getDailyScore(todayStr);
+
+    if (todayScore === null || todayScore < 70) {
+        cursor.setDate(cursor.getDate() - 1);
+    }
 
     while (true) {
         const dateStr = dateKeyFromLocal(cursor);
@@ -960,11 +978,10 @@ function checkRollover() {
                     changed = true;
                     if (task.text.startsWith("🔄 ")) return;
 
-                    const targetDate = getNextDateKey(dateStr);
                     const newTask = cloneTaskForRollover(task);
                     newTask.rolledFrom = dateStr;
-                    mergeTaskIntoDate(targetDate, newTask);
-                    normalizeDuplicateTasks(targetDate);
+                    mergeTaskIntoDate(todayStr, newTask);
+                    normalizeDuplicateTasks(todayStr);
                     changed = true;
                 }
             });
@@ -972,11 +989,7 @@ function checkRollover() {
         }
     });
 
-    if (!dailyData[todayStr] && habitBlueprint.length > 0) {
-        dailyData[todayStr] = [];
-        habitBlueprint.forEach(h => { dailyData[todayStr].push({ text: h.text, priority: 'prio-med', done: false }); });
-        changed = true;
-    }
+    if (addHabitTasksForDate(todayStr)) changed = true;
     if (changed) { save(); calculateStreak(); }
 }
 
@@ -1011,8 +1024,8 @@ function scrollToToday(instant = false) {
 
 function createDay(instant = false) {
     const date = document.getElementById('datePicker').value; if(!date || dailyData[date]) return;
-    dailyData[date] = []; 
-    habitBlueprint.forEach(h => { dailyData[date].push({ text: h.text, priority: 'prio-med', done: false }); });
+    dailyData[date] = [];
+    addHabitTasksForDate(date);
     addRecurringTasksForDate(date);
     save(); const container = document.getElementById('daily-container');
     container.innerHTML = ''; Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
@@ -1029,8 +1042,8 @@ function createMonth() {
     for (let day = 1; day <= daysInMonth; day++) {
         const dateStr = `${year}-${month}-${day.toString().padStart(2, '0')}`;
         if (!dailyData[dateStr]) { 
-            dailyData[dateStr] = []; 
-            habitBlueprint.forEach(h => { dailyData[dateStr].push({ text: h.text, priority: 'prio-med', done: false }); });
+            dailyData[dateStr] = [];
+            addHabitTasksForDate(dateStr);
             addRecurringTasksForDate(dateStr);
             changed = true; 
         }
