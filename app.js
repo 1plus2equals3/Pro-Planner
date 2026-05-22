@@ -980,8 +980,9 @@ function checkRollover() {
 
                     const newTask = cloneTaskForRollover(task);
                     newTask.rolledFrom = dateStr;
-                    mergeTaskIntoDate(todayStr, newTask);
-                    normalizeDuplicateTasks(todayStr);
+                    const targetDate = getNextDateKey(dateStr);
+                    mergeTaskIntoDate(targetDate, newTask);
+                    normalizeDuplicateTasks(targetDate);
                     changed = true;
                 }
             });
@@ -1065,7 +1066,7 @@ function createTaskElement(date, task, idx) {
     const todayStr = dateKeyFromLocal(new Date());
     const li = document.createElement('li'); 
     
-    if (!task.dismissed && (task.rolledOver || (date < todayStr && !task.done))) li.classList.add('missed-task');
+    if (task.rolledOver || (date < todayStr && !task.done)) li.classList.add('missed-task');
     
     li.draggable = true; li.dataset.index = idx; li.dataset.date = date;
     li.addEventListener('dragstart', handleDragStartDay); li.addEventListener('dragover', handleDragOverDay);
@@ -1117,15 +1118,10 @@ function createTaskElement(date, task, idx) {
     `;
 
     li.style.flexDirection = 'column'; li.style.alignItems = 'stretch';
-    const isMissed = !task.dismissed && (task.rolledOver || (date < todayStr && !task.done));
+    const isMissed = task.rolledOver || (date < todayStr && !task.done);
     const displayText = isMissed ? 'MISSED: ' + task.text : task.text;
     const missedActionsHTML = isMissed ? `
         <div class="missed-status-tag">${task.rolledFrom ? `ROLLED FROM ${escapeHTML(task.rolledFrom)}` : 'MISSED TASK'}</div>
-        <div class="task-quick-actions">
-            <button onclick="rescheduleTask('${date}', ${idx}, 0)">MOVE TODAY</button>
-            <button onclick="rescheduleTask('${date}', ${idx}, 1)">MOVE TOMORROW</button>
-            <button onclick="dismissMissedTask('${date}', ${idx})">DISMISS</button>
-        </div>
     ` : '';
     
     li.innerHTML = `
@@ -1862,32 +1858,6 @@ function saveDayNote() {
     if (btn) btn.classList.toggle('has-note', Boolean(note));
     closeModal('taskNotesModal');
     notifyUser('NOTE SAVED', 'Day note updated.', 'success');
-}
-
-function rescheduleTask(sourceDate, idx, offsetDays) {
-    if (!dailyData[sourceDate] || !dailyData[sourceDate][idx]) return;
-    const target = new Date();
-    target.setDate(target.getDate() + offsetDays);
-    const targetDate = dateKeyFromLocal(target);
-    if (!dailyData[targetDate]) dailyData[targetDate] = [];
-    const [task] = dailyData[sourceDate].splice(idx, 1);
-    task.rolledOver = false;
-    task.done = false;
-    dailyData[targetDate].push(task);
-    save();
-    rerenderDay(sourceDate);
-    rerenderDay(targetDate);
-    calculateStreak();
-    notifyUser('RESCHEDULED', `Moved to ${targetDate}.`, 'success');
-}
-
-function dismissMissedTask(date, idx) {
-    if (!dailyData[date] || !dailyData[date][idx]) return;
-    dailyData[date][idx].rolledOver = false;
-    dailyData[date][idx].dismissed = true;
-    save();
-    updateTaskElement(date, idx);
-    notifyUser('DISMISSED', 'Missed state removed for this task.', 'success');
 }
 
 function recurringMatchesDate(rule, dateStr) {
