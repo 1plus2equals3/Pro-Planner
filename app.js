@@ -89,7 +89,7 @@ function getDailyScore(dateStr) {
 
 function normalizeTaskLabel(text) {
     return String(text || '')
-        .replace(/^❌\s*missed:\s*/i, '')
+        .replace(/^missed:\s*/i, '')
         .trim()
         .replace(/\s+/g, ' ')
         .toLowerCase();
@@ -259,14 +259,16 @@ function getGoals(type) {
 if (auth) auth.onAuthStateChanged(async (user) => {
     const btn = document.getElementById('authBtnModal');
     const status = document.getElementById('syncStatus');
+    const deleteBtn = document.getElementById('deleteCloudDataBtn');
     if (user) {
         currentUser = user;
         if(btn) {
-            btn.innerHTML = '🔓 LOGOUT';
+            btn.innerHTML = 'LOGOUT';
             btn.style.background = 'var(--done-green)';
             btn.style.color = '#000';
             btn.style.borderColor = 'transparent';
         }
+        if (deleteBtn) deleteBtn.classList.remove('hidden');
         if(status) {
             status.innerText = `Synced as: ${user.email}`;
             status.style.color = 'var(--done-green)';
@@ -275,11 +277,12 @@ if (auth) auth.onAuthStateChanged(async (user) => {
     } else {
         currentUser = null;
         if(btn) {
-            btn.innerHTML = '🔒 LOGIN WITH GOOGLE';
+            btn.innerHTML = 'LOGIN WITH GOOGLE';
             btn.style.background = 'rgba(255,255,255,0.1)';
             btn.style.color = '#fff';
             btn.style.borderColor = 'rgba(255,255,255,0.2)';
         }
+        if (deleteBtn) deleteBtn.classList.add('hidden');
         if(status) {
             status.innerText = 'Sync is paused.';
             status.style.color = 'inherit';
@@ -289,19 +292,50 @@ if (auth) auth.onAuthStateChanged(async (user) => {
 
 function toggleAuth() {
     if (!auth || !provider) {
-        alert("Cloud sync is unavailable offline. Your planner still works locally.");
+        notifyUser('CLOUD SYNC UNAVAILABLE', 'Your planner still works locally on this device.', 'warn');
         return;
     }
     if (window.location.protocol === 'file:') {
-        alert("⚠️ GOOGLE LOGIN ERROR! ⚠️\n\nGoogle Login 'file://' wale link par kaam nahi karta hai.\nUpload to Netlify/Vercel or use VS Code Live Server.");
+        notifyUser('GOOGLE LOGIN BLOCKED', 'Google login needs http://, https://, or a local dev server. Local planner features still work.', 'warn', 7000);
         return;
     }
     if (currentUser) {
-        auth.signOut().then(() => alert("Logged out! Sync paused."));
+        auth.signOut().then(() => notifyUser('LOGGED OUT', 'Cloud sync is paused. Local planner data remains on this device.', 'success'));
     } else {
         auth.signInWithPopup(provider).catch(error => {
-            alert("LOGIN BLOCKED: " + error.message);
+            notifyUser('LOGIN BLOCKED', error.message, 'error', 7000);
         });
+    }
+}
+
+async function deleteCloudAccountData() {
+    if (!currentUser || !auth || !db) {
+        notifyUser('NOT SIGNED IN', 'There is no cloud account active right now.', 'warn');
+        return;
+    }
+
+    const confirmed = confirm(
+        'Delete cloud sync data for this Google account?\n\n' +
+        'This removes your Firebase planner copy and signs you out. Local data on this device is not deleted.'
+    );
+    if (!confirmed) return;
+
+    const user = currentUser;
+    try {
+        await db.ref('plannerUsers/' + user.uid).remove();
+        try {
+            await user.delete();
+            notifyUser('ACCOUNT DELETED', 'Cloud data and the app account record were deleted. Local data remains on this device.', 'success', 7000);
+        } catch (deleteError) {
+            if (deleteError && deleteError.code === 'auth/requires-recent-login') {
+                notifyUser('REAUTH REQUIRED', 'Cloud data was deleted. Log in again recently if you also want to delete the auth account record.', 'warn', 8000);
+            } else {
+                notifyUser('CLOUD DATA DELETED', 'Planner sync data was deleted. Auth account deletion was not completed.', 'warn', 8000);
+            }
+        }
+        await auth.signOut();
+    } catch (error) {
+        notifyUser('DELETE FAILED', error.message || 'Could not delete cloud data right now.', 'error', 8000);
     }
 }
 
@@ -524,11 +558,11 @@ function checkUpcomingExamNotification() {
     if (upcomingExams.length > 0) {
         const closest = upcomingExams[0];
         let msg = "";
-        if (closest.diffDays === 0) msg = `${closest.name} IS TODAY! BEST OF LUCK! 🔥`;
-        else if (closest.diffDays === 1) msg = `ONLY 1 DAY LEFT FOR ${closest.name}! BUCKLE UP! 🚀`;
-        else msg = `${closest.diffDays} DAYS LEFT FOR ${closest.name}! KEEP HUSTLING! 📚`;
-
-        playAlarm('chime'); showNotification("🎯 UPCOMING EXAM", msg);
+        if (closest.diffDays === 0) msg = `${closest.name} IS TODAY. BEST OF LUCK.`;
+        else if (closest.diffDays === 1) msg = `ONLY 1 DAY LEFT FOR ${closest.name}. STAY READY.`;
+        else msg = `${closest.diffDays} DAYS LEFT FOR ${closest.name}. KEEP PREPARING.`;
+        
+        playAlarm('chime'); showNotification("UPCOMING EXAM", msg);
         localStorage.setItem('vibeExamNotifDate', todayStr);
     }
 }
@@ -671,7 +705,7 @@ function setCustomReminder() {
     const msg = document.getElementById('customRemMsg').value;
     const mins = parseInt(document.getElementById('customRemTime').value);
     if(!msg || !mins || mins <= 0) { alert("Please enter a valid message and time."); return; }
-    setTimeout(() => { playAlarm(); showNotification("🔔 REMINDER", toTitleCase(msg)); }, mins * 60 * 1000);
+    setTimeout(() => { playAlarm(); showNotification("REMINDER", toTitleCase(msg)); }, mins * 60 * 1000);
     document.getElementById('customRemMsg').value = ''; document.getElementById('customRemTime').value = '';
     alert(`Reminder set for ${mins} minute(s) from now!`);
 }
@@ -723,8 +757,8 @@ function applySettings() {
     document.getElementById('notifToggle').checked = settings.notificationsEnabled;
     document.getElementById('notifToggleCheck').classList.toggle('checked', settings.notificationsEnabled);
 
-    document.getElementById('workMsgInput').value = settings.workMsg || "TIME FOR A BREAK! ☕";
-    document.getElementById('breakMsgInput').value = settings.breakMsg || "BACK TO WORK! 🚀";
+    document.getElementById('workMsgInput').value = settings.workMsg || "TIME FOR A BREAK!";
+    document.getElementById('breakMsgInput').value = settings.breakMsg || "BACK TO WORK!";
     
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) hInput.value = settings.hundredPercentMsg;
@@ -761,8 +795,8 @@ function saveSettings() {
     settings.soundEnabled = document.getElementById('soundToggle').checked;
     settings.soundType = document.getElementById('soundTypeSelect').value;
     settings.notificationsEnabled = document.getElementById('notifToggle').checked;
-    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "TIME FOR A BREAK! ☕";
-    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "BACK TO WORK! 🚀";
+    settings.workMsg = document.getElementById('workMsgInput').value.trim() || "TIME FOR A BREAK!";
+    settings.breakMsg = document.getElementById('breakMsgInput').value.trim() || "BACK TO WORK!";
 
     let hInput = document.getElementById('hundredMsgInput');
     if(hInput) settings.hundredPercentMsg = hInput.value.trim() || "Solid work today. You did what you promised yourself. Now rest, reset, and bring the same discipline tomorrow. The streak continues.";
@@ -915,7 +949,7 @@ function updateProgress(date) {
 function addHabit() {
     const name = toTitleCase(document.getElementById('habitName').value.trim());
     if(!name) return;
-    const habitText = "🔄 " + name;
+    const habitText = "RECURRING: " + name;
     habitBlueprint.push({ id: Date.now(), text: habitText }); 
     localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
     scheduleSyncToFirebase();
@@ -961,7 +995,7 @@ function renderHabitBlueprint() {
         return `
         <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary); box-shadow: 0 0 10px rgba(0,0,0,0.5);">
             <div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(habit.text)}</div>
-            <button class="task-del" onclick="removeHabit(${habitId})">×</button>
+            <button class="task-del" onclick="removeHabit(${habitId})">X</button>
         </div>
     `;
     }).join('');
@@ -976,7 +1010,7 @@ function checkRollover() {
                 if (!task.done && !task.rolledOver) {
                     task.rolledOver = true;
                     changed = true;
-                    if (task.text.startsWith("🔄 ")) return;
+                    if (task.text.startsWith("RECURRING: ")) return;
 
                     const newTask = cloneTaskForRollover(task);
                     newTask.rolledFrom = dateStr;
@@ -1061,7 +1095,7 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
-/* --- THE NEW SURGICAL DOM CREATION LOGIC 🚀 --- */
+/* --- DOM creation logic --- */
 function createTaskElement(date, task, idx) {
     const todayStr = dateKeyFromLocal(new Date());
     const li = document.createElement('li'); 
@@ -1074,7 +1108,7 @@ function createTaskElement(date, task, idx) {
     
     let subtasksHTML = '';
     let hasSubtasks = task.subtasks && task.subtasks.length > 0;
-    let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '▶' : '▼'}</button>` : '';
+    let toggleBtnHTML = hasSubtasks ? `<button class="collapse-subtask-btn" onclick="toggleSubtaskList('${date}', ${idx})" title="Toggle Subtasks">${task.stCollapsed ? '+' : '-'}</button>` : '';
     
     if(hasSubtasks) {
         subtasksHTML = `<ul class="subtask-list" style="display: ${task.stCollapsed ? 'none' : 'block'};">`;
@@ -1090,7 +1124,7 @@ function createTaskElement(date, task, idx) {
                     <span class="subtask-text ${stClass}" contenteditable="${date >= todayStr}" onblur="editSubtask('${date}', ${idx}, ${sIdx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
                         ${escapeHTML(st.text)}
                     </span>
-                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">×</button>
+                    <button class="task-del" style="font-size: 0.9rem;" onclick="removeSubtask('${date}', ${idx}, ${sIdx})">X</button>
                 </li>
             `;
         });
@@ -1133,8 +1167,8 @@ function createTaskElement(date, task, idx) {
             <span class="task-text ${task.done ? 'done' : ''}" contenteditable="${date >= todayStr}" onblur="editTask('${date}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">
                 ${escapeHTML(displayText)}
             </span>
-            <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">↳</button>
-            <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">×</button>
+            <button class="add-subtask-btn" onclick="toggleSubtaskInput('${date}', ${idx})" title="Add Subtask">SUB</button>
+            <button class="task-del" onclick="removeSpecificTask('${date}', ${idx}, this)">X</button>
         </div>
         ${missedActionsHTML}
         ${subtasksHTML}
@@ -1345,7 +1379,7 @@ document.addEventListener('click', () => {
 
 
 function editTask(date, idx, element) {
-    let newText = toTitleCase(element.innerText.replace(/^❌\s*Missed:\s*/i, '').replace(/^MISSED:\s*/i, '').trim());
+    let newText = toTitleCase(element.innerText.replace(/^MISSED:\s*/i, '').trim());
     if (newText === "") { element.innerText = dailyData[date][idx].text; return; }
     dailyData[date][idx].text = newText;
     normalizeDuplicateTasks(date);
@@ -1369,9 +1403,9 @@ function showCelebrationModal() {
         modal.className = 'modal-overlay custom-celeb-overlay';
         modal.innerHTML = `
             <div class="modal-card celeb-card">
-                <h2>🏆 BEAST MODE ACTIVATED</h2>
+                <h2>DAY COMPLETE</h2>
                 <p id="celebMsgText" style="text-align:center; font-size: 0.85rem; line-height: 1.6; color: rgba(255,255,255,0.8); margin-bottom: 25px; font-weight: 800; letter-spacing: 1px; white-space: pre-wrap;"></p>
-                <button class="action-btn accent" style="width: 100%; padding: 14px; font-size: 0.9rem;" onclick="closeModal('celebModal')">STAY HARD 🔥</button>
+                <button class="action-btn accent" style="width: 100%; padding: 14px; font-size: 0.9rem;" onclick="closeModal('celebModal')">CONTINUE</button>
             </div>
         `;
         document.body.appendChild(modal);
@@ -1387,7 +1421,7 @@ function handleCheck(date, idx, checkboxElement) {
         if(task.subtasks) task.subtasks.forEach(st => st.done = task.done);
         save(); 
         
-        updateTaskElement(date, idx); // 🚀 Surgical update
+        updateTaskElement(date, idx);
         updateProgress(date); calculateStreak();
 
         let totalTasks = dailyData[date].length;
@@ -1439,7 +1473,7 @@ function renderGoal(type, text, done, idx) {
     li.innerHTML = `
         <div class="custom-checkbox ${done ? 'checked' : ''}" onclick="handleGoalCheck('${type}', ${idx}, this)"></div> 
         <span class="task-text ${done ? 'done' : ''}" contenteditable="true" onblur="editGoal('${type}', ${idx}, this)" onkeydown="if(event.key==='Enter'){event.preventDefault(); this.blur();}">${escapeHTML(text)}</span>
-        <button class="task-del" onclick="removeGoal('${type}', ${idx}, this)">×</button>
+        <button class="task-del" onclick="removeGoal('${type}', ${idx}, this)">X</button>
     `;
     document.getElementById(`list-${type}`).appendChild(li);
 }
@@ -1557,7 +1591,7 @@ function renderReports() {
                 <div style="font-size: 0.9rem;">${escapeHTML(r.stats)}</div>
                 <div style="font-size: 0.65rem; opacity: 0.7;">${escapeHTML(r.details)}</div>
             </div>
-            <button class="task-del" onclick="event.stopPropagation(); removeReport(${reportId})">×</button>
+            <button class="task-del" onclick="event.stopPropagation(); removeReport(${reportId})">X</button>
         </div>
     `;
     }).join('');
@@ -1565,7 +1599,7 @@ function renderReports() {
 
 function viewReport(id) {
     const r = reports.find(rep => Number(rep.id) === Number(id)); if (!r) return;
-    document.getElementById('reportModalTitle').innerText = `📊 ${r.month} REPORT`;
+    document.getElementById('reportModalTitle').innerText = `${r.month} REPORT`;
     
     const detailsParts = String(r.details || '0/0 ACTIONS').split('/');
     let avgTasks = r.advanced && r.advanced.avgTasksPerDay ? escapeHTML(r.advanced.avgTasksPerDay) : "-";
@@ -1647,7 +1681,7 @@ function viewReport(id) {
                 gridLines += `<text x="-10" y="${yVal + 3}" fill="rgba(255,255,255,0.6)" font-size="10" text-anchor="end" font-weight="900">${p}%</text>`;
             });
 
-            content += `<h3 style="font-size:0.8rem; color:var(--primary); letter-spacing:2px; margin-bottom:15px; margin-top:10px;">📈 DAILY CONSISTENCY</h3>
+            content += `<h3 style="font-size:0.8rem; color:var(--primary); letter-spacing:2px; margin-bottom:15px; margin-top:10px;">DAILY CONSISTENCY</h3>
             <div style="background: rgba(0,0,0,0.3); padding: 20px 15px 15px 45px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); margin-bottom: 10px; width: 100%; box-sizing: border-box;">
                 <svg viewBox="-45 -10 455 120" style="width:100%; height:auto; overflow:visible; display:block;">
                     ${gridLines}
@@ -1764,7 +1798,7 @@ function renderExams() {
         html += `
         <details style="margin-bottom: 20px; outline: none;">
             <summary style="list-style: none; text-align: center; cursor: pointer; font-size: 1.5rem; filter: drop-shadow(0 0 10px rgba(0,255,136,0.4)); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
-                🏆
+                DONE
             </summary>
             <div style="margin-top: 15px; animation: fadeIn 0.3s ease;">
                 ${aced.map(exam => `
@@ -1773,7 +1807,7 @@ function renderExams() {
                         <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${escapeHTML(exam.name)}</div>
                         <div style="font-size: 0.65rem; opacity: 0.6;">${escapeHTML(exam.examDateStr)}</div>
                     </div>
-                    <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
+                    <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">X</button>
                 </div>`).join('')}
             </div>
             <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); margin: 15px 0;"></div>
@@ -1784,12 +1818,12 @@ function renderExams() {
         html += pending.map(exam => {
             let dTxt = "", bCol = "var(--primary)";
             if (exam.diffDays > 0) dTxt = `${exam.diffDays} DAYS LEFT`;
-            else if (exam.diffDays === 0) { dTxt = `TODAY! 🔥`; bCol = "var(--done-green)"; }
+            else if (exam.diffDays === 0) { dTxt = `TODAY`; bCol = "var(--done-green)"; }
 
             return `
             <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
                 <div><div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(exam.name)}</div><div style="font-size: 0.7rem; opacity: 0.7;">${escapeHTML(exam.examDateStr)}</div></div>
-                <div style="display: flex; align-items: center; gap: 10px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="mini-tool-btn" onclick="generateExamStudyPlan(${exam.id})">PLAN</button><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
+                <div style="display: flex; align-items: center; gap: 10px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="mini-tool-btn" onclick="generateExamStudyPlan(${exam.id})">PLAN</button><button class="task-del" onclick="removeExam(${exam.id})">X</button></div>
             </div>`;
         }).join('');
     } else if (aced.length === 0) {
@@ -2356,7 +2390,7 @@ if ('serviceWorker' in navigator && /^https?:$/.test(window.location.protocol)) 
                     });
                 });
             })
-            .catch(err => console.log('Service Worker failed! ❌', err));
+            .catch(err => console.log('Service Worker failed', err));
     });
 }
 
@@ -2364,7 +2398,7 @@ function toggleSubtaskList(date, idx) {
     let task = dailyData[date][idx];
     task.stCollapsed = !task.stCollapsed;
     save();
-    updateTaskElement(date, idx); // 🚀 Surgical update
+    updateTaskElement(date, idx);
 }
 
 function toggleSubtaskInput(date, idx) {
@@ -2396,7 +2430,7 @@ function handleSubtaskCheck(date, tIdx, sIdx) {
     dailyData[date][tIdx].done = allDone; 
     
     save(); 
-    updateTaskElement(date, tIdx); // 🚀 Surgical update
+    updateTaskElement(date, tIdx);
     updateProgress(date); calculateStreak();
 
     let totalTasks = dailyData[date].length;
@@ -2419,7 +2453,7 @@ function editSubtask(date, tIdx, sIdx, element) {
     let text = toTitleCase(element.innerText.trim());
     if (text === "") { element.innerText = dailyData[date][tIdx].subtasks[sIdx].text; return; }
     dailyData[date][tIdx].subtasks[sIdx].text = text; save();
-    updateTaskElement(date, tIdx); // 🚀 Surgical update
+    updateTaskElement(date, tIdx);
 }
 
 function removeSubtask(date, tIdx, sIdx) {
@@ -2429,6 +2463,6 @@ function removeSubtask(date, tIdx, sIdx) {
         dailyData[date][tIdx].done = allDone;
     }
     save(); 
-    updateTaskElement(date, tIdx); // 🚀 Surgical update
+    updateTaskElement(date, tIdx);
     updateProgress(date); calculateStreak();
 }

@@ -40,13 +40,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 .bg-active { opacity: 1; }
 .bg-overlay { position: fixed; top: 0; left: 0; width: 100%; height: 100%; z-index: -1; background: var(--bg-dim); transition: background 0.3s ease; }
 
-/* ⬇️ SOFT GLOW APPLIED: Header */
+/* Header */
 header { padding: 8px 20px; display: flex; justify-content: space-between; align-items: center; backdrop-filter: blur(20px); background: rgba(0,0,0,0.7); border-bottom: 1px solid rgba(255,255,255,0.08); position: sticky; top: 0; z-index: 100; box-shadow: 0 4px 30px rgba(0, 0, 0, 0.5), 0 0 10px rgba(162, 155, 254, 0.05); }
 header h1 { font-size: 1rem; letter-spacing: 4px; margin: 0; font-weight: 900; background: linear-gradient(45deg, #fff, var(--primary), #fff); background-size: 200% auto; color: transparent; -webkit-background-clip: text; background-clip: text; animation: gradientText 3s linear infinite; transition: transform 0.3s ease; cursor: default; text-shadow: 0 0 5px rgba(162, 155, 254, 0.2); }
 header h1:hover { transform: scale(1.05); text-shadow: 0 0 12px var(--primary); }
 @keyframes gradientText { 0% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } 100% { background-position: 0% 50%; } }
 
-/* ⬇️ SOFT GLOW APPLIED: Badges & Banners */
+/* Badges and banners */
 .quote-banner { text-align: center; padding: 6px; font-size: 0.7rem; font-weight: 800; letter-spacing: 2px; color: rgba(255,255,255,0.7); background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(255,255,255,0.05); text-shadow: 0 0 5px rgba(255,255,255,0.1); }
 .toast-region { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 10px; z-index: 10000; pointer-events: none; }
 .toast { width: min(360px, calc(100vw - 36px)); padding: 12px 14px; border-radius: 8px; background: rgba(12, 12, 14, 0.96); border: 1px solid var(--surface-border); box-shadow: var(--shadow-strong); color: #fff; font-size: 0.75rem; font-weight: 850; letter-spacing: 0.4px; backdrop-filter: blur(16px); animation: toastIn 0.2s ease-out; pointer-events: auto; }
@@ -61,7 +61,7 @@ header h1:hover { transform: scale(1.05); text-shadow: 0 0 12px var(--primary); 
 .draggable-nav:active { cursor: grabbing !important; transform: scale(0.95); }
 .streak-badge { font-size: 0.75rem; background: rgba(255,118,117,0.15); padding: 6px 12px; border-radius: 8px; border: 1px solid rgba(255,118,117,0.4); font-weight: 900; box-shadow: 0 0 5px rgba(255,118,117,0.2); white-space: nowrap; }
 
-/* ⬇️ SOFT GLOW APPLIED: Action Buttons */
+/* Action buttons */
 button.action-btn { cursor: pointer; border: none; border-radius: 6px; background: var(--surface); color: white; padding: 6px 12px; font-weight: 900; font-size: 0.7rem; border: 1px solid rgba(255,255,255,0.15); transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1); backdrop-filter: blur(5px); letter-spacing: 1px; box-shadow: 0 0 5px rgba(162, 155, 254, 0.05); position: relative; overflow: hidden; white-space: nowrap; }
 button.action-btn::after { content: ''; position: absolute; top: 50%; left: 50%; width: 150%; height: 150%; background: radial-gradient(circle, rgba(255,255,255,0.2) 10%, transparent 40%); transform: translate(-50%, -50%) scale(0); border-radius: 50%; transition: transform 0.5s ease-out; }
 button.action-btn:hover::after { transform: translate(-50%, -50%) scale(1); }
@@ -86,7 +86,7 @@ button.action-btn.accent:hover { box-shadow: 0 0 15px var(--primary), 0 0 25px v
 
 #daily-container { display: flex; overflow-x: auto; gap: 30px; width: 100%; max-width: 1400px; padding: 20px 10px 50px 10px; perspective: 1200px; }
 
-/* ⬇️ SOFT GLOW APPLIED: Cards */
+/* Cards */
 .card { background: var(--glass); backdrop-filter: var(--blur); border-radius: 8px; padding: 25px; min-width: 380px; max-width: 380px; min-height: 300px; max-height: 450px; border: 1px solid var(--surface-border); box-shadow: var(--shadow-strong), 0 0 5px rgba(162, 155, 254, 0.02); display: flex; flex-direction: column; transform-style: preserve-3d; position: relative; transition: border-color 0.25s ease, transform 0.25s ease-out, box-shadow 0.25s ease-out; will-change: transform; }
 .card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; border-radius: 8px; background: radial-gradient(800px circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(255,255,255,0.08), transparent 40%); pointer-events: none; z-index: 0; transition: opacity 0.4s ease; opacity: 0; }
 .card:hover::before { opacity: 1; }
@@ -109,7 +109,7 @@ button.action-btn.accent:hover { box-shadow: 0 0 15px var(--primary), 0 0 25px v
 .time-picker-row.show { display: flex; }
 @keyframes slideDown { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: translateY(0); } }
 
-/* ⬇️ SOFT GLOW APPLIED: Inputs */
+/* Inputs */
 input[type="text"], input[type="time"], input[type="date"], input[type="month"], input[type="number"], select, textarea { padding: 10px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); outline: none; background: rgba(0,0,0,0.4); color: #fff; font-weight: 800; font-size: 0.75rem; transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease; min-width: 0; }
 input[type="text"]::placeholder, textarea::placeholder { color: rgba(255,255,255,0.4); }
 input[type="text"]:focus, input[type="number"]:focus, textarea:focus, input[type="time"]:focus { background: rgba(0,0,0,0.6); border-color: var(--primary); box-shadow: 0 0 10px rgba(162, 155, 254, 0.2); }
@@ -117,7 +117,7 @@ input[type="time"] { padding: 6px 10px; font-size: 0.7rem; color: var(--primary)
 input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 select { background: rgba(20,20,20,0.9); cursor: pointer; }
 
-/* ⬇️ SOFT GLOW APPLIED: Add Buttons */
+/* Add buttons */
 button.add-btn { cursor: pointer; border: none; border-radius: 8px; background: var(--primary); color: #000; padding: 10px 15px; font-weight: 900; font-size: 0.75rem; transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1); box-shadow: 0 4px 10px rgba(0,0,0,0.3), 0 0 6px rgba(162, 155, 254, 0.2); position: relative; overflow: hidden;}
 button.add-btn::after { content: ''; position: absolute; top: 50%; left: 50%; width: 150%; height: 150%; background: radial-gradient(circle, rgba(255,255,255,0.4) 10%, transparent 40%); transform: translate(-50%, -50%) scale(0); border-radius: 50%; transition: transform 0.4s ease-out; }
 button.add-btn:hover::after { transform: translate(-50%, -50%) scale(1); }
@@ -127,7 +127,7 @@ ul { list-style: none; padding: 0; flex-grow: 1; margin: 0; overflow-y: auto; ov
 li { background: rgba(0,0,0,0.4); padding: 10px 14px; border-radius: 8px; margin-bottom: 8px; display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 0.75rem; border: 1px solid rgba(255,255,255,0.05); transition: background 0.2s ease, transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease; }
 li:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); border-color: rgba(255,255,255,0.2); box-shadow: 0 6px 15px rgba(0,0,0,0.4), 0 0 8px rgba(162, 155, 254, 0.1);}
 
-/* ⬇️ SOFT GLOW APPLIED: Priority Dots */
+/* Priority dots */
 .prio-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; cursor: pointer; transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.4s ease; border: 2px solid rgba(0,0,0,0.5);}
 .prio-dot:hover { transform: scale(1.6); }
 .prio-high { background: var(--high); box-shadow: 0 0 5px var(--high); }
@@ -147,7 +147,7 @@ li.missed-task .task-clock-icon:hover { filter: drop-shadow(0 0 4px var(--missed
 .task-time-editor-actions button { flex: 1; border: 1px solid rgba(255,255,255,0.14); border-radius: 6px; padding: 6px 7px; background: rgba(255,255,255,0.08); color: #fff; font-size: 0.58rem; font-weight: 900; cursor: pointer; }
 .task-time-editor-actions button:first-child { background: var(--primary); color: #000; border-color: transparent; }
 
-/* ⬇️ SOFT GLOW APPLIED: Checkbox Pulse */
+/* Checkbox pulse */
 @keyframes checkPulse {
     0% { transform: scale(1); box-shadow: 0 0 0 0 rgba(0, 255, 136, 0.6); }
     50% { transform: scale(1.3); box-shadow: 0 0 15px 5px rgba(0, 255, 136, 0); }
@@ -228,7 +228,7 @@ li.missed-task span.task-text { text-decoration: line-through; text-decoration-c
 .color-swatch.active { border-color: white; transform: scale(1.2); box-shadow: 0 0 10px currentColor; }
 input[type="range"] { accent-color: var(--primary); cursor: pointer;}
 
-/* ⬇️ SOFT GLOW APPLIED: Timer */
+/* Timer */
 .timer-display { font-size: 4.5rem; font-weight: 900; text-align: center; letter-spacing: 8px; color: var(--primary); margin: 25px 0; font-variant-numeric: tabular-nums; text-shadow: 0 0 10px var(--primary); animation: timerPulse 3s infinite alternate ease-in-out; }
 @keyframes timerPulse { 0% { text-shadow: 0 0 8px var(--primary); transform: scale(1); } 100% { text-shadow: 0 0 18px var(--primary), 0 0 8px rgba(255,255,255,0.3); transform: scale(1.03); } }
 .timer-controls { display: flex; justify-content: center; gap: 15px; margin-bottom: 20px; }
@@ -255,12 +255,46 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
     line-height: 1 !important; margin-top: 10px !important;
 }
 
+.settings-note {
+    margin: 0 0 4px;
+    color: rgba(255,255,255,0.68);
+    font-size: 0.68rem;
+    line-height: 1.45;
+    text-transform: none;
+    letter-spacing: 0.2px;
+}
+.danger-btn {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 1px solid rgba(255,118,117,0.55);
+    background: rgba(255,118,117,0.12);
+    color: #ffb3b3;
+    cursor: pointer;
+    font-weight: 900;
+    font-size: 0.72rem;
+    letter-spacing: 0.7px;
+}
+.danger-btn:hover {
+    background: rgba(255,118,117,0.2);
+    border-color: rgba(255,118,117,0.9);
+}
+.policy-link {
+    color: var(--primary);
+    font-size: 0.68rem;
+    font-weight: 900;
+    text-align: center;
+    text-decoration: none;
+    letter-spacing: 0.6px;
+}
+.policy-link:hover { text-decoration: underline; }
+
 .custom-celeb-overlay { background: rgba(0,0,0,0.6) !important; backdrop-filter: blur(4px) !important; z-index: 9997 !important; }
 .celeb-card { border-color: var(--done-green) !important; box-shadow: 0 20px 50px rgba(0,0,0,0.9), 0 0 20px rgba(0, 255, 136, 0.1) !important; align-items: center; }
 .celeb-card h2 { color: var(--done-green) !important; text-shadow: 0 0 10px rgba(0, 255, 136, 0.3) !important; border-bottom: 1px solid rgba(0,255,136,0.2) !important; width: 100%; text-align: center; }
 
 /* =========================================
-   📱 ULTRA-PREMIUM MOBILE OPTIMIZATION V2
+   Mobile optimization
    ========================================= */
 @media screen and (max-width: 768px) {
     body, html { width: 100%; overflow-x: hidden; -webkit-tap-highlight-color: transparent; }
