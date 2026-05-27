@@ -16,7 +16,7 @@
 
     <title>PLANNER</title>
     
-    <link rel="stylesheet" href="./style.css?v=13">
+    <link rel="stylesheet" href="./style.css?v=11">
     
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -31,15 +31,15 @@
 <header>
     <h1>PRO PLANNER</h1>
     <div class="controls-row" id="navControlsRow">
-        <div class="streak-badge draggable-nav" id="nav-streak" draggable="true">STREAK <span id="streakCount">0</span></div>
-        <button class="action-btn draggable-nav" id="nav-timer" draggable="true" onclick="openModal('pomodoroModal')">TIMER</button>
+        <div class="streak-badge draggable-nav" id="nav-streak" draggable="true">🔥 <span id="streakCount">0</span></div>
+        <button class="action-btn draggable-nav" id="nav-timer" draggable="true" onclick="openModal('pomodoroModal')">⏱️ TIMER</button>
         <button class="action-btn draggable-nav" id="nav-habits" draggable="true" onclick="openModal('habitsModal')">HABITS</button>
-        <button class="action-btn draggable-nav" id="nav-exams" draggable="true" onclick="openModal('examModal')">EXAMS</button>
-        <button class="action-btn draggable-nav" id="nav-stats" draggable="true" onclick="openModal('statsModal')">STATS</button>
+        <button class="action-btn draggable-nav" id="nav-exams" draggable="true" onclick="openModal('examModal')">🎯 EXAMS</button>
+        <button class="action-btn draggable-nav" id="nav-stats" draggable="true" onclick="openModal('statsModal')">📊 STATS</button>
         
         <div class="dropdown-container draggable-nav" id="nav-data-menu" draggable="true">
             
-            <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)" style="font-size: 1.1rem; padding: 4px 10px;">MENU</button>
+            <button class="action-btn dropdown-btn" onclick="toggleDropdown(event)" style="font-size: 1.1rem; padding: 4px 10px;">⋮</button>
             <div class="dropdown-menu" id="dataDropdown">
                 <button class="dropdown-item" onclick="openCommandPalette()">COMMAND PALETTE</button>
                 <button class="dropdown-item" onclick="openToolModal('brief')">TODAY BRIEF</button>
@@ -49,12 +49,12 @@
                 <button class="dropdown-item" onclick="openToolModal('recurring')">RECURRING TASKS</button>
                 <button class="dropdown-item" onclick="openToolModal('templates')">TEMPLATES</button>
                 <button class="dropdown-item" onclick="openToolModal('health')">DATA HEALTH</button>
-                <button class="dropdown-item" onclick="exportBackup()">BACKUP DATA</button>
-                <button class="dropdown-item" onclick="document.getElementById('importFile').click()">RESTORE DATA</button>
+                <button class="dropdown-item" onclick="exportBackup()">💾 BACKUP DATA</button>
+                <button class="dropdown-item" onclick="document.getElementById('importFile').click()">📂 RESTORE DATA</button>
             </div>
         </div>
 
-        <button class="action-btn accent draggable-nav" id="nav-settings" draggable="true" onclick="openModal('settingsModal')">SETTINGS</button>
+        <button class="action-btn accent draggable-nav" id="nav-settings" draggable="true" onclick="openModal('settingsModal')">⚙️ SETTINGS</button>
         <button class="action-btn draggable-nav hidden" id="installAppBtn" draggable="true" onclick="installApp()">INSTALL</button>
    
         <input type="file" id="importFile" style="display:none" accept=".json" onchange="importBackup(event)">
@@ -73,9 +73,9 @@
     </div>
 
     <div class="nav-controls">
-        <button class="arrow" onclick="scrollTimeline(-450)">PREV</button>
-        <button class="action-btn accent" style="padding: 8px 20px; font-size: 0.75rem;" onclick="scrollToToday()">JUMP TO TODAY</button>
-        <button class="arrow" onclick="scrollTimeline(450)">NEXT</button>
+        <button class="arrow" onclick="scrollTimeline(-450)">←</button>
+        <button class="action-btn accent" style="padding: 8px 20px; font-size: 0.75rem;" onclick="scrollToToday()">🎯 JUMP TO TODAY</button>
+        <button class="arrow" onclick="scrollTimeline(450)">→</button>
     </div>
     
     <div id="daily-container"></div>
@@ -83,7 +83,7 @@
 
 <div class="bottom-goals">
     <div class="card" style="height: 340px;">
-        <h2>MONTHLY FOCUS</h2>
+        <h2>🗓️ MONTHLY FOCUS</h2>
         <div class="input-group">
             <input type="text" id="in-month" placeholder="NEW GOAL..." onkeydown="if(event.key==='Enter') addGoal('month')">
             <button class="add-btn" onclick="addGoal('month')">ADD</button>
@@ -92,7 +92,7 @@
         <ul id="list-month"></ul>
     </div>
     <div class="card" style="height: 340px;">
-        <h2>YEARLY VISION</h2>
+        <h2>🏆 YEARLY VISION</h2>
         <div class="input-group">
             <input type="text" id="in-year" placeholder="BIG PICTURE..." onkeydown="if(event.key==='Enter') addGoal('year')">
             <button class="add-btn" onclick="addGoal('year')">ADD</button>
@@ -101,7 +101,7 @@
     </div>
     <div class="card" style="height: 340px;">
       
-        <h2>ARCHIVES</h2>
+        <h2>📈 ARCHIVES</h2>
         <div id="report-list" style="overflow-y: auto; flex-grow: 1; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1);"></div>
         <button class="add-btn" onclick="manualArchive()" style="width: 100%; font-size: 0.75rem;">GENERATE PREV MONTH REPORT</button>
     </div>
@@ -122,18 +122,15 @@
 </div>
 <div id="settingsModal" class="modal-overlay">
     <div class="modal-card" style="position: relative; max-height: 85vh; overflow-y: auto;">
-        <button onclick="closeModal('settingsModal')" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: rgba(255,255,255,0.4); font-size: 1.5rem; cursor: pointer; transition: 0.2s;" onmouseover="this.style.transform='scale(1.2)'; this.style.color='#ff7675'" onmouseout="this.style.transform='scale(1)'; this.style.color='rgba(255,255,255,0.4)'">X</button>
-        <h2>SETTINGS</h2>
+        <button onclick="closeModal('settingsModal')" style="position: absolute; top: 15px; right: 20px; background: none; border: none; color: rgba(255,255,255,0.4); font-size: 1.5rem; cursor: pointer; transition: 0.2s;" onmouseover="this.style.transform='scale(1.2)'; this.style.color='#ff7675'" onmouseout="this.style.transform='scale(1)'; this.style.color='rgba(255,255,255,0.4)'">✖</button>
+        <h2>⚙️ SETTINGS</h2>
         
         <div class="setting-row" style="flex-direction: column; align-items: stretch; gap: 8px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 20px; margin-bottom: 20px; background: rgba(0,0,0,0.3); padding: 15px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.05);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                <span style="color: var(--primary); text-shadow: 0 0 10px rgba(162, 155, 254, 0.3); font-weight: 900;">CLOUD SYNC</span>
+                <span style="color: var(--primary); text-shadow: 0 0 10px rgba(162, 155, 254, 0.3); font-weight: 900;">☁️ CLOUD SYNC</span>
                 <span id="syncStatus" style="font-size: 0.65rem; opacity: 0.6; text-align: right; text-transform: none;">Sync is paused.</span>
             </div>
-            <p class="settings-note">Cloud sync stores planner data in Firebase only after Google login. The app remains usable locally when sync is off.</p>
-            <button class="add-btn" id="authBtnModal" onclick="toggleAuth()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); transition: 0.3s;">LOGIN WITH GOOGLE</button>
-            <button class="danger-btn hidden" id="deleteCloudDataBtn" onclick="deleteCloudAccountData()">DELETE CLOUD DATA / ACCOUNT</button>
-            <a class="policy-link" href="./privacy.html" target="_blank" rel="noopener">Privacy and data policy</a>
+            <button class="add-btn" id="authBtnModal" onclick="toggleAuth()" style="width: 100%; padding: 12px; background: rgba(255,255,255,0.1); color: white; border: 1px solid rgba(255,255,255,0.2); transition: 0.3s;">🔒 LOGIN WITH GOOGLE</button>
         </div>
 
         <div class="setting-row">
@@ -186,12 +183,12 @@
 
         <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
             <span>CUSTOM WORK END MSG</span>
-            <input type="text" id="workMsgInput" placeholder="TIME FOR A BREAK!" style="width: 100%;">
+            <input type="text" id="workMsgInput" placeholder="TIME FOR A BREAK! ☕" style="width: 100%;">
         </div>
 
         <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px;">
             <span>CUSTOM BREAK END MSG</span>
-            <input type="text" id="breakMsgInput" placeholder="BACK TO WORK!" style="width: 100%;">
+            <input type="text" id="breakMsgInput" placeholder="BACK TO WORK! 🚀" style="width: 100%;">
         </div> 
 
         <div class="setting-row" style="flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 15px;">
@@ -213,7 +210,7 @@
 
 <div id="pomodoroModal" class="modal-overlay">
     <div class="modal-card">
-        <h2>FOCUS TIMER</h2>
+        <h2>⏰ FOCUS TIMER</h2>
         <div class="timer-mode">
             <button class="mode-btn active" id="btnWork" onclick="setTimerMode('work')">WORK (25m)</button>
             <button class="mode-btn" id="btnBreak" onclick="setTimerMode('break')">BREAK (5m)</button>
@@ -229,7 +226,7 @@
 
 <div id="statsModal" class="modal-overlay">
     <div class="modal-card" style="max-width: 800px; width: 95%;">
-        <h2>WEEKLY STATS</h2>
+        <h2>📊 WEEKLY STATS</h2>
         <div id="statsContent" style="display:flex; flex-direction:row; gap:30px; margin-bottom: 20px; flex-grow:1; justify-content:center; align-items:center; flex-wrap: wrap;"></div>
         <button class="action-btn" onclick="closeModal('statsModal')" style="align-self:center; width:100%; margin-top: 15px;">CLOSE</button>
     </div>
@@ -237,7 +234,7 @@
 
 <div id="examModal" class="modal-overlay">
     <div class="modal-card">
-        <h2>EXAM TRACKER</h2>
+        <h2>🎯 EXAM TRACKER</h2>
         <div class="input-group" style="margin-bottom: 15px;">
             <input type="text" id="examName" placeholder="EXAM (e.g. FINALS)">
             <input type="date" id="examDate">
@@ -250,7 +247,7 @@
 
 <div id="reportModal" class="modal-overlay">
     <div class="modal-card" style="max-width: 700px; width: 95%; max-height: 90vh; overflow-y: auto;">
-        <h2 id="reportModalTitle">MONTHLY REPORT</h2>
+        <h2 id="reportModalTitle">📊 MONTHLY REPORT</h2>
         <div id="reportModalContent" style="display:flex; flex-direction:column; gap:20px; padding-right: 10px;"></div>
         <button class="action-btn" onclick="closeModal('reportModal')" style="width:100%; margin-top: 15px;">CLOSE REPORT</button>
     </div>
@@ -284,6 +281,6 @@
     </div>
 </div>
 
-<script defer src="./app.js?v=13"></script>
+<script defer src="./app.js?v=11"></script>
 </body>
 </html>
