@@ -1061,6 +1061,36 @@ function createMonth() {
     } else { alert("All days for this month are already in your planner!"); }
 }
 
+function deleteSelectedMonth() {
+    const monthVal = document.getElementById('monthPicker').value;
+    if (!monthVal) { alert("Please select a month first!"); return; }
+
+    const [year, month] = monthVal.split('-').map(Number);
+    const monthPrefix = `${year}-${String(month).padStart(2, '0')}`;
+    const monthLabel = new Date(year, month - 1).toLocaleString('default', { month: 'long', year: 'numeric' });
+    const datesToDelete = Object.keys(dailyData).filter(date => date.startsWith(`${monthPrefix}-`));
+
+    if (!datesToDelete.length) {
+        alert(`No days found for ${monthLabel}.`);
+        return;
+    }
+
+    if (!confirm(`Delete ${monthLabel} from your planner? This will remove ${datesToDelete.length} day card(s).`)) return;
+
+    datesToDelete.forEach(date => {
+        delete dailyData[date];
+        delete dailyNotes[date];
+    });
+
+    save();
+    calculateStreak();
+    const container = document.getElementById('daily-container');
+    if (container) {
+        container.innerHTML = '';
+        Object.keys(dailyData).sort().forEach(d => renderDailyCard(d));
+    }
+}
+
 /* --- THE NEW SURGICAL DOM CREATION LOGIC 🚀 --- */
 function createTaskElement(date, task, idx) {
     const todayStr = dateKeyFromLocal(new Date());
