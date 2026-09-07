@@ -1335,11 +1335,49 @@ function getDuration(start, end) {
 
 function toggleTimeEditor(event, date, idx) {
     event.stopPropagation();
+    const targetId = `time-edit-${date}-${idx}`;
     document.querySelectorAll('.task-time-editor.show').forEach(menu => {
-        if (menu.id !== `time-edit-${date}-${idx}`) menu.classList.remove('show');
+        if (menu.id !== targetId) closeTaskTimeEditor(menu);
     });
-    const menu = document.getElementById(`time-edit-${date}-${idx}`);
-    if (menu) menu.classList.toggle('show');
+    const menu = document.getElementById(targetId);
+    if (!menu) return;
+
+    if (menu.classList.contains('show')) {
+        closeTaskTimeEditor(menu);
+        return;
+    }
+
+    // The task list scrolls, so an editor kept inside it gets clipped by the
+    // list's overflow boundary. Portal the open editor to body while editing.
+    const placeholder = document.createComment(`time-editor:${targetId}`);
+    menu.parentNode.insertBefore(placeholder, menu);
+    document.body.appendChild(menu);
+    menu.classList.add('is-portal', 'show');
+
+    const triggerRect = event.currentTarget.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+    const gap = 8;
+    const left = Math.max(8, Math.min(triggerRect.left, window.innerWidth - menuRect.width - 8));
+    const belowTop = triggerRect.bottom + gap;
+    const top = belowTop + menuRect.height <= window.innerHeight - 8
+        ? belowTop
+        : Math.max(8, triggerRect.top - menuRect.height - gap);
+    menu.style.left = `${left}px`;
+    menu.style.top = `${top}px`;
+    menu._timeEditorPlaceholder = placeholder;
+}
+
+function closeTaskTimeEditor(menu) {
+    if (!menu) return;
+    menu.classList.remove('show', 'is-portal');
+    menu.style.left = '';
+    menu.style.top = '';
+    const placeholder = menu._timeEditorPlaceholder;
+    if (placeholder && placeholder.parentNode) {
+        placeholder.parentNode.insertBefore(menu, placeholder);
+        placeholder.remove();
+    }
+    delete menu._timeEditorPlaceholder;
 }
 
 function saveTaskTime(date, idx) {
@@ -1353,6 +1391,7 @@ function saveTaskTime(date, idx) {
     dailyData[date][idx].startTime = start;
     if (end) dailyData[date][idx].endTime = end;
     else delete dailyData[date][idx].endTime;
+    closeTaskTimeEditor(document.getElementById(`time-edit-${date}-${idx}`));
     sortTasks(date);
     save();
     rerenderDay(date);
@@ -1363,6 +1402,7 @@ function clearTaskTime(date, idx) {
     if (!dailyData[date] || !dailyData[date][idx]) return;
     delete dailyData[date][idx].startTime;
     delete dailyData[date][idx].endTime;
+    closeTaskTimeEditor(document.getElementById(`time-edit-${date}-${idx}`));
     sortTasks(date);
     save();
     rerenderDay(date);
@@ -1370,8 +1410,17 @@ function clearTaskTime(date, idx) {
 }
 
 document.addEventListener('click', () => {
-    document.querySelectorAll('.task-time-editor.show').forEach(menu => menu.classList.remove('show'));
+    document.querySelectorAll('.task-time-editor.show').forEach(closeTaskTimeEditor);
 });
+
+// A portaled editor is independent of the scrolling task list. Close it when
+// the day cards move so it never remains detached from its task.
+document.addEventListener('scroll', (event) => {
+    const scroller = event.target;
+    if (scroller && scroller.matches && scroller.matches('#daily-container, .card ul')) {
+        document.querySelectorAll('.task-time-editor.show').forEach(closeTaskTimeEditor);
+    }
+}, true);
 
 
 function editTask(date, idx, element) {

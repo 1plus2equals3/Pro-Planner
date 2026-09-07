@@ -145,6 +145,7 @@ li.missed-task .task-clock-icon { color: var(--missed); opacity: 0.6; }
 li.missed-task .task-clock-icon:hover { filter: drop-shadow(0 0 4px var(--missed)); }
 .task-time-editor { display: none; position: absolute; left: 0; top: calc(100% + 8px); min-width: 168px; padding: 10px; border-radius: 8px; background: rgba(12,12,14,0.98); border: 1px solid rgba(255,255,255,0.14); box-shadow: var(--shadow-strong); z-index: 80; }
 .task-time-editor.show { display: grid; gap: 8px; animation: fadeIn 0.15s ease; }
+.task-time-editor.is-portal { position: fixed; z-index: 1000; }
 .task-time-editor label { display: grid; gap: 4px; color: rgba(255,255,255,0.65); font-size: 0.55rem; font-weight: 900; letter-spacing: 1px; }
 .task-time-editor input[type="time"] { width: 100%; box-sizing: border-box; }
 .task-time-editor-actions { display: flex; gap: 6px; }
