@@ -119,6 +119,8 @@ input[type="text"]::placeholder, textarea::placeholder { color: rgba(255,255,255
 input[type="text"]:focus, input[type="number"]:focus, textarea:focus, input[type="time"]:focus { background: rgba(0,0,0,0.6); border-color: var(--primary); box-shadow: 0 0 10px rgba(162, 155, 254, 0.2); }
 input[type="time"] { padding: 6px 10px; font-size: 0.7rem; color: var(--primary); }
 input[type="time"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
+input[type="date"]::-webkit-calendar-picker-indicator,
+input[type="month"]::-webkit-calendar-picker-indicator { filter: invert(1); cursor: pointer; }
 select { background: rgba(20,20,20,0.9); cursor: pointer; }
 
 /* ⬇️ SOFT GLOW APPLIED: Add Buttons */
