@@ -192,7 +192,10 @@ function addHabitTasksForDate(dateStr) {
     let changed = false;
     habitBlueprint.forEach(habit => {
         if (!dailyData[dateStr].some(task => task.text === habit.text)) {
-            dailyData[dateStr].push({ text: habit.text, priority: 'prio-med', done: false });
+            const task = { text: habit.text, priority: 'prio-med', done: false };
+            if (habit.startTime) task.startTime = habit.startTime;
+            if (habit.endTime) task.endTime = habit.endTime;
+            dailyData[dateStr].push(task);
             changed = true;
         }
     });
@@ -916,10 +919,18 @@ function addHabit() {
     const name = toTitleCase(document.getElementById('habitName').value.trim());
     if(!name) return;
     const habitText = "🔄 " + name;
-    habitBlueprint.push({ id: Date.now(), text: habitText }); 
+    const startTime = document.getElementById('habit-st-time').value;
+    const endTime = document.getElementById('habit-en-time').value;
+    const habit = { id: Date.now(), text: habitText };
+    if (startTime) habit.startTime = startTime;
+    if (endTime) habit.endTime = endTime;
+    habitBlueprint.push(habit); 
     localStorage.setItem('vibeHabits', JSON.stringify(habitBlueprint)); 
     scheduleSyncToFirebase();
     document.getElementById('habitName').value = ''; 
+    document.getElementById('habit-st-time').value = '';
+    document.getElementById('habit-en-time').value = '';
+    document.getElementById('habit-time-row').classList.remove('show');
     renderHabitBlueprint();
 
     const todayStr = dateKeyFromLocal(new Date());
@@ -928,8 +939,12 @@ function addHabit() {
     Object.keys(dailyData).forEach(dateStr => {
         if (dateStr >= todayStr) {
             if (!dailyData[dateStr].some(t => t.text === habitText)) {
-                dailyData[dateStr].push({ text: habitText, priority: 'prio-med', done: false });
+                const task = { text: habitText, priority: 'prio-med', done: false };
+                if (startTime) task.startTime = startTime;
+                if (endTime) task.endTime = endTime;
+                dailyData[dateStr].push(task);
                 changed = true;
+                sortTasks(dateStr);
                 const ul = document.getElementById(`list-${dateStr}`);
                 if(ul) {
                     ul.innerHTML = ''; 
@@ -958,9 +973,12 @@ function renderHabitBlueprint() {
     }
     container.innerHTML = habitBlueprint.filter(habit => Number.isFinite(Number(habit.id))).map(habit => {
         const habitId = Number(habit.id);
+        const habitTime = habit.startTime
+            ? `${formatTime12h(habit.startTime)}${habit.endTime ? ` - ${formatTime12h(habit.endTime)}` : ''}`
+            : '';
         return `
         <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid var(--primary); box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-            <div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(habit.text)}</div>
+            <div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(habit.text)}${habitTime ? `<div style="font-size:0.62rem; opacity:0.65; margin-top:4px;">🕒 ${escapeHTML(habitTime)}</div>` : ''}</div>
             <button class="task-del" onclick="removeHabit(${habitId})">×</button>
         </div>
     `;

@@ -16,7 +16,7 @@
 
     <title>PLANNER</title>
     
-    <link rel="stylesheet" href="./style.css?v=13">
+    <link rel="stylesheet" href="./style.css?v=14">
     
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -123,7 +123,15 @@
         <p style="font-size:0.7rem; opacity:0.7; text-align:center; margin-top:-10px; margin-bottom: 20px;">These habits auto-fill every new day.</p>
         <div class="input-group" style="margin-bottom: 15px;">
             <input type="text" id="habitName" placeholder="HABIT (e.g. WORKOUT)" onkeydown="if(event.key==='Enter') addHabit()">
+            <button class="icon-btn" type="button" onclick="document.getElementById('habit-time-row').classList.toggle('show')" title="Set habit time" aria-label="Set habit start and end time">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+            </button>
             <button class="add-btn" onclick="addHabit()">ADD</button>
+        </div>
+        <div class="time-picker-row habit-time-row" id="habit-time-row">
+            <input type="time" id="habit-st-time" aria-label="Habit start time">
+            <span style="font-size:0.7rem; opacity:0.5; font-weight:900;">TO</span>
+            <input type="time" id="habit-en-time" aria-label="Habit end time">
         </div>
         <ul id="habitList" style="flex-grow: 1; overflow-y: auto; max-height: 300px; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;"></ul>
         <button class="action-btn" onclick="closeModal('habitsModal')" style="align-self:center; width:100%; margin-top: auto;">CLOSE</button>
@@ -290,6 +298,6 @@
     </div>
 </div>
 
-<script defer src="./app.js?v=13"></script>
+<script defer src="./app.js?v=14"></script>
 </body>
 </html>
