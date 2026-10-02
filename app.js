@@ -432,6 +432,7 @@ const motivationalQuotes = [
 ];
 
 let appHasRendered = false;
+let examNotificationInterval = null;
 
 function renderApp(fromSync = false) {
     hydratePlannerState();
@@ -466,6 +467,9 @@ function renderApp(fromSync = false) {
     scrollToToday(true); 
     initBackground();
     if (!fromSync) setTimeout(checkUpcomingExamNotification, 2000);
+    if (!examNotificationInterval) {
+        examNotificationInterval = setInterval(checkUpcomingExamNotification, 60000);
+    }
 
     document.querySelectorAll('.bottom-goals .card').forEach(card => {
         init3DTilt(card);
@@ -509,7 +513,7 @@ function init3DTilt(card) {
 }
 
 function checkUpcomingExamNotification() {
-    if (!settings.notificationsEnabled || trackedExams.length === 0) return;
+    if (trackedExams.length === 0) return;
     const todayStr = dateKeyFromLocal(new Date());
     const lastNotifDate = localStorage.getItem('vibeExamNotifDate');
     if (lastNotifDate === todayStr) return;
@@ -531,9 +535,31 @@ function checkUpcomingExamNotification() {
         else if (closest.diffDays === 1) msg = `ONLY 1 DAY LEFT FOR ${closest.name}! BUCKLE UP! 🚀`;
         else msg = `${closest.diffDays} DAYS LEFT FOR ${closest.name}! KEEP HUSTLING! 📚`;
 
-        playAlarm('chime'); showNotification("🎯 UPCOMING EXAM", msg);
+        playAlarm('chime'); showExamReminderModal(closest, msg);
         localStorage.setItem('vibeExamNotifDate', todayStr);
     }
+}
+
+function showExamReminderModal(exam, message) {
+    let modal = document.getElementById('examReminderModal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'examReminderModal';
+        modal.className = 'modal-overlay custom-exam-overlay';
+        modal.innerHTML = `
+            <div class="modal-card exam-reminder-card">
+                <h2>🎯 EXAM REMINDER</h2>
+                <div class="exam-reminder-badge">CLOSEST UPCOMING EXAM</div>
+                <p id="examReminderName" class="exam-reminder-name"></p>
+                <p id="examReminderMessage" class="exam-reminder-message"></p>
+                <button class="action-btn accent" style="width: 100%; padding: 14px; font-size: 0.9rem;" onclick="closeModal('examReminderModal')">GOT IT — BACK TO WORK 🔥</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+    document.getElementById('examReminderName').innerText = exam.name;
+    document.getElementById('examReminderMessage').innerText = message;
+    openModal('examReminderModal');
 }
 
 let draggedNav = null;
@@ -1813,6 +1839,8 @@ function addExam() {
     document.getElementById('examName').value = ''; 
     document.getElementById('examDate').value = ''; 
     renderExams();
+    localStorage.removeItem('vibeExamNotifDate');
+    checkUpcomingExamNotification();
 }
 
 function removeExam(id) {
