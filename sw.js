@@ -1,10 +1,10 @@
-const CACHE_NAME = 'pro-planner-v15';
+const CACHE_NAME = 'pro-planner-v16';
 const ASSETS = [
   './',
   './index.html',
   './index.html?app=new',
-  './style.css?v=15',
-  './app.js?v=15',
+  './style.css?v=16',
+  './app.js?v=16',
   './manifest.json',
   './icon.png',
   './icon-192.png',
