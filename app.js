@@ -481,26 +481,11 @@ function renderApp(fromSync = false) {
 }
 
 window.addEventListener('load', () => {
+    // Clear the legacy persistent flag once per genuinely loaded window.
+    localStorage.removeItem('vibeExamNotifDate');
     renderApp();
     initPWAEnhancements();
 }, { once: true });
-
-// Installed PWAs are often resumed from Recents without a new page load.
-// Treat each return to the foreground as a fresh planner open so the exam
-// reminder is shown without requiring a manual refresh.
-function checkExamReminderOnOpen() {
-    examNotificationShownDate = null;
-    // Remove the old persistent flag left by previous versions. It must not
-    // suppress reminders in a newly opened PWA window.
-    localStorage.removeItem('vibeExamNotifDate');
-    hydratePlannerState();
-    setTimeout(checkUpcomingExamNotification, 150);
-}
-
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') checkExamReminderOnOpen();
-});
-window.addEventListener('pageshow', checkExamReminderOnOpen);
 
 function setRandomQuote() {
     const quote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)];
