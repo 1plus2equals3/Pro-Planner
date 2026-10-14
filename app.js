@@ -433,6 +433,7 @@ const motivationalQuotes = [
 
 let appHasRendered = false;
 let examNotificationInterval = null;
+let examNotificationShownDate = null;
 
 function renderApp(fromSync = false) {
     hydratePlannerState();
@@ -466,7 +467,9 @@ function renderApp(fromSync = false) {
 
     scrollToToday(true); 
     initBackground();
-    if (!fromSync) setTimeout(checkUpcomingExamNotification, 2000);
+    // Check after every render, including a remote-sync render. The
+    // in-memory date guard prevents duplicate popups during this app session.
+    setTimeout(checkUpcomingExamNotification, fromSync ? 100 : 2000);
     if (!examNotificationInterval) {
         examNotificationInterval = setInterval(checkUpcomingExamNotification, 60000);
     }
@@ -515,8 +518,10 @@ function init3DTilt(card) {
 function checkUpcomingExamNotification() {
     if (trackedExams.length === 0) return;
     const todayStr = dateKeyFromLocal(new Date());
-    const lastNotifDate = localStorage.getItem('vibeExamNotifDate');
-    if (lastNotifDate === todayStr) return;
+    // Keep this guard in memory only so every fresh app launch can show the
+    // reminder again. The old localStorage guard incorrectly suppressed the
+    // popup after reopening the planner on the same day.
+    if (examNotificationShownDate === todayStr) return;
 
     const today = new Date(); 
     today.setHours(0,0,0,0); 
@@ -535,8 +540,9 @@ function checkUpcomingExamNotification() {
         else if (closest.diffDays === 1) msg = `ONLY 1 DAY LEFT FOR ${closest.name}! BUCKLE UP! 🚀`;
         else msg = `${closest.diffDays} DAYS LEFT FOR ${closest.name}! KEEP HUSTLING! 📚`;
 
-        playAlarm('chime'); showExamReminderModal(closest, msg);
-        localStorage.setItem('vibeExamNotifDate', todayStr);
+        // Exam reminders are intentionally visual-only; do not play any sound.
+        showExamReminderModal(closest, msg);
+        examNotificationShownDate = todayStr;
     }
 }
 
@@ -1839,7 +1845,6 @@ function addExam() {
     document.getElementById('examName').value = ''; 
     document.getElementById('examDate').value = ''; 
     renderExams();
-    localStorage.removeItem('vibeExamNotifDate');
     checkUpcomingExamNotification();
 }
 
