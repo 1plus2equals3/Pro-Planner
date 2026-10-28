@@ -205,6 +205,25 @@ li.missed-task span.task-text { text-decoration: line-through; text-decoration-c
 
 #reportModalContent, #statsContent, #examList { overflow-y: auto; flex-shrink: 1; padding-right: 5px; margin-bottom: 15px; }
 #reportModalContent::-webkit-scrollbar, #statsContent::-webkit-scrollbar, #examList::-webkit-scrollbar { display: none; }
+.exam-category-manager { margin: 0 0 12px; border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; background: rgba(255,255,255,0.035); padding: 9px 11px; }
+.exam-category-manager > summary, .trophy-category > summary { cursor: pointer; list-style: none; color: var(--primary); font-size: 0.68rem; font-weight: 900; letter-spacing: 0.7px; }
+.exam-category-manager > summary::-webkit-details-marker, .trophy-category > summary::-webkit-details-marker { display: none; }
+.exam-category-manager > summary span { opacity: 0.55; font-size: 0.6rem; }
+.exam-category-form { display: grid; grid-template-columns: minmax(90px, 1fr) auto auto 36px; align-items: center; gap: 6px; padding-top: 10px; }
+.exam-category-form input[type="text"] { min-width: 0; width: 100%; }
+.exam-category-form label { display: flex; align-items: center; gap: 4px; white-space: nowrap; font-size: 0.55rem; opacity: 0.7; }
+.exam-category-form input[type="date"] { width: 118px; max-width: 100%; min-width: 0; padding: 8px 5px; font-size: 0.65rem; }
+.exam-category-form .add-btn { min-width: 36px; padding: 8px 10px; }
+.exam-category-list { display: flex; flex-direction: column; gap: 5px; margin-top: 8px; }
+.exam-category-manager-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 8px; border-radius: 6px; background: rgba(0,0,0,0.28); font-size: 0.65rem; }
+.exam-category-manager-item span { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.exam-category-manager-item small { opacity: 0.55; font-size: 0.58rem; }
+.exam-category-manager-item .task-del { font-size: 1rem; }
+.exam-category-empty { opacity: 0.45; font-size: 0.62rem; padding: 5px; }
+.trophy-category { margin: 7px 0; padding: 8px 10px; border: 1px solid rgba(0,255,136,0.12); border-radius: 8px; background: rgba(0,255,136,0.025); }
+.trophy-category > summary { color: var(--done-green); }
+.trophy-category > summary span { opacity: 0.65; }
+.trophy-category-exams { margin-top: 8px; }
 .tool-modal-card { max-width: 760px; width: 95%; }
 .tool-modal-content { overflow-y: auto; padding-right: 4px; max-height: 65vh; }
 .metric-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 16px; }
@@ -305,6 +324,12 @@ input[type="range"] { accent-color: var(--primary); cursor: pointer;}
     .calendar-grid button { min-height: 48px; }
     .tool-list > div { align-items: flex-start; flex-direction: column; }
     .tool-list span { margin-left: 0; text-align: left; }
+}
+@media screen and (max-width: 520px) {
+    .exam-category-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 36px; }
+    .exam-category-form input[type="text"] { grid-column: 1 / -1; }
+    .exam-category-form label { min-width: 0; gap: 3px; }
+    .exam-category-form label input[type="date"] { width: 100%; }
 }
 button, .custom-checkbox, .prio-dot, .draggable-nav { user-select: none; }
 

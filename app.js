@@ -316,6 +316,7 @@ async function syncToFirebase() {
             dailyNotes: JSON.stringify(dailyNotes),
             reports: JSON.stringify(reports),
             trackedExams: JSON.stringify(trackedExams),
+            examCategories: localStorage.getItem('vibeExamCategories') || '[]',
             habits: JSON.stringify(habitBlueprint),
             recurringTasks: JSON.stringify(recurringTasks),
             templates: JSON.stringify(plannerTemplates),
@@ -347,6 +348,7 @@ async function loadDataFromFirebase() {
             dailyNotes: 'vibeDailyNotes',
             reports: 'vibeReports',
             trackedExams: 'vibeExams',
+            examCategories: 'vibeExamCategories',
             habits: 'vibeHabits',
             recurringTasks: 'vibeRecurringTasks',
             templates: 'vibeTemplates',
@@ -383,6 +385,7 @@ let dailyData = safeObject(safeReadJSON('vibeProFinal', {}));
 let dailyNotes = safeObject(safeReadJSON('vibeDailyNotes', {}));
 let reports = safeArray(safeReadJSON('vibeReports', []));
 let trackedExams = safeArray(safeReadJSON('vibeExams', []));
+let examCategories = safeArray(safeReadJSON('vibeExamCategories', []));
 let habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
 let recurringTasks = safeArray(safeReadJSON('vibeRecurringTasks', []));
 let plannerTemplates = safeArray(safeReadJSON('vibeTemplates', []));
@@ -411,6 +414,7 @@ function hydratePlannerState() {
     dailyNotes = safeObject(safeReadJSON('vibeDailyNotes', {}));
     reports = safeArray(safeReadJSON('vibeReports', []));
     trackedExams = safeArray(safeReadJSON('vibeExams', []));
+    examCategories = safeArray(safeReadJSON('vibeExamCategories', []));
     habitBlueprint = safeArray(safeReadJSON('vibeHabits', []));
     recurringTasks = safeArray(safeReadJSON('vibeRecurringTasks', []));
     plannerTemplates = safeArray(safeReadJSON('vibeTemplates', []));
@@ -1837,6 +1841,41 @@ function renderStats() {
     `;
 }
 
+function persistExamCategories() {
+    localStorage.setItem('vibeExamCategories', JSON.stringify(examCategories));
+    scheduleSyncToFirebase();
+}
+
+function addExamCategory() {
+    const name = toTitleCase(document.getElementById('examCategoryName').value.trim());
+    const start = document.getElementById('examCategoryStart').value;
+    const end = document.getElementById('examCategoryEnd').value;
+    if (!name || !start || !end || start > end) {
+        notifyUser('CHECK CATEGORY', 'Add a name and valid start/end dates.', 'error');
+        return;
+    }
+    if (examCategories.some(category => category.name.toLowerCase() === name.toLowerCase())) {
+        notifyUser('CATEGORY EXISTS', 'Choose a different category name.', 'error');
+        return;
+    }
+    examCategories.push({ id: Date.now(), name, start, end });
+    persistExamCategories();
+    document.getElementById('examCategoryName').value = '';
+    document.getElementById('examCategoryStart').value = '';
+    document.getElementById('examCategoryEnd').value = '';
+    renderExams();
+}
+
+function removeExamCategory(id) {
+    examCategories = examCategories.filter(category => Number(category.id) !== Number(id));
+    persistExamCategories();
+    renderExams();
+}
+
+function categoryForExam(exam) {
+    return examCategories.find(category => exam.date >= category.start && exam.date <= category.end) || null;
+}
+
 function addExam() {
     const name = toTitleCase(document.getElementById('examName').value.trim());
     const date = document.getElementById('examDate').value;
@@ -1859,6 +1898,18 @@ function removeExam(id) {
 
 function renderExams() {
     const container = document.getElementById('examList');
+    const categoryList = document.getElementById('examCategoryList');
+    if (categoryList) {
+        const todayKey = dateKeyFromLocal(new Date());
+        const visibleCategories = examCategories.filter(category => {
+            const categoryExams = trackedExams.filter(exam => exam.date >= category.start && exam.date <= category.end);
+            const allCategoryExamsCompleted = categoryExams.length > 0 && categoryExams.every(exam => exam.date < todayKey);
+            return !allCategoryExamsCompleted;
+        });
+        categoryList.innerHTML = visibleCategories.length ? visibleCategories.map(category => `
+            <div class="exam-category-manager-item"><span>🗂️ <b>${escapeHTML(category.name)}</b><small>${escapeHTML(category.start)} → ${escapeHTML(category.end)}</small></span>
+            <button class="task-del" aria-label="Delete ${escapeHTML(category.name)} category" onclick="removeExamCategory(${Number(category.id)})">×</button></div>`).join('') : `<div class="exam-category-empty">${examCategories.length ? '🏆 Completed categories are in the trophy' : 'No categories yet'}</div>`;
+    }
     if(trackedExams.length === 0) { 
         container.innerHTML = `<p style="text-align:center; opacity:0.5; font-size:0.8rem;">NO EXAMS TRACKED</p>`; 
         return; 
@@ -1893,20 +1944,27 @@ function renderExams() {
     let html = "";
 
     if (aced.length > 0) {
+        const uncategorized = aced.filter(exam => !categoryForExam(exam));
         html += `
         <details style="margin-bottom: 20px; outline: none;">
             <summary style="list-style: none; text-align: center; cursor: pointer; font-size: 1.5rem; filter: drop-shadow(0 0 10px rgba(0,255,136,0.4)); transition: transform 0.2s;" onmouseover="this.style.transform='scale(1.2)'" onmouseout="this.style.transform='scale(1)'">
                 🏆
             </summary>
             <div style="margin-top: 15px; animation: fadeIn 0.3s ease;">
-                ${aced.map(exam => `
+                ${examCategories.map(category => {
+                    const exams = aced.filter(exam => exam.date >= category.start && exam.date <= category.end);
+                    if (!exams.length) return '';
+                    return `<details class="trophy-category"><summary>🗂️ ${escapeHTML(category.name)} <span>(${exams.length})</span></summary><div class="trophy-category-exams">${exams.map(exam => `
                 <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);">
                     <div>
                         <div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${escapeHTML(exam.name)}</div>
                         <div style="font-size: 0.65rem; opacity: 0.6;">${escapeHTML(exam.examDateStr)}</div>
                     </div>
                     <button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button>
-                </div>`).join('')}
+                </div>`).join('')}</div></details>`;
+                }).join('')}
+                ${uncategorized.length ? `<details class="trophy-category"><summary>📋 Other <span>(${uncategorized.length})</span></summary><div class="trophy-category-exams">${uncategorized.map(exam => `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 6px 10px; margin-bottom: 5px; border-radius: 8px; border: 1px solid rgba(0,255,136,0.1); background: rgba(0,255,136,0.05);"><div><div style="font-weight: 900; font-size: 0.8rem; color: var(--done-green);">${escapeHTML(exam.name)}</div><div style="font-size: 0.65rem; opacity: 0.6;">${escapeHTML(exam.examDateStr)}</div></div><button class="task-del" style="font-size: 1.2rem; margin:0;" onclick="removeExam(${exam.id})">×</button></div>`).join('')}</div></details>` : ''}
             </div>
             <div style="border-bottom: 1px dashed rgba(255,255,255,0.1); margin: 15px 0;"></div>
         </details>`;
@@ -1920,7 +1978,7 @@ function renderExams() {
 
             return `
             <div style="background: rgba(0,0,0,0.3); padding: 12px; border-radius: 10px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid ${bCol}; box-shadow: 0 0 10px rgba(0,0,0,0.5);">
-                <div><div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(exam.name)}</div><div style="font-size: 0.7rem; opacity: 0.7;">${escapeHTML(exam.examDateStr)}</div></div>
+                <div><div style="font-weight: 900; font-size: 0.9rem;">${escapeHTML(exam.name)}</div><div style="font-size: 0.7rem; opacity: 0.7;">${escapeHTML(exam.examDateStr)}${categoryForExam(exam) ? ` · 🗂️ ${escapeHTML(categoryForExam(exam).name)}` : ''}</div></div>
                 <div style="display: flex; align-items: center; gap: 10px;"><div style="font-weight: 900; font-size: 0.8rem; color: ${bCol}; text-shadow: 0 0 10px ${bCol};">${dTxt}</div><button class="mini-tool-btn" onclick="generateExamStudyPlan(${exam.id})">PLAN</button><button class="task-del" onclick="removeExam(${exam.id})">×</button></div>
             </div>`;
         }).join('');

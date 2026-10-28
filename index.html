@@ -16,7 +16,7 @@
 
     <title>PLANNER</title>
     
-    <link rel="stylesheet" href="./style.css?v=15">
+    <link rel="stylesheet" href="./style.css?v=16">
     
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-app-compat.js"></script>
     <script defer src="https://www.gstatic.com/firebasejs/10.8.1/firebase-auth-compat.js"></script>
@@ -257,6 +257,16 @@
             <input type="date" id="examDate">
             <button class="add-btn" onclick="addExam()">ADD</button>
         </div>
+        <details class="exam-category-manager">
+            <summary>＋ 🗂️ CATEGORIES</summary>
+            <div class="exam-category-form">
+                <input type="text" id="examCategoryName" placeholder="CATEGORY NAME">
+                <label>FROM <input type="date" id="examCategoryStart" aria-label="Category start date"></label>
+                <label>TO <input type="date" id="examCategoryEnd" aria-label="Category end date"></label>
+                <button class="add-btn" onclick="addExamCategory()">＋</button>
+            </div>
+            <div id="examCategoryList" class="exam-category-list"></div>
+        </details>
         <div id="examList" style="flex-grow: 1; overflow-y: auto; max-height: 300px; margin-bottom: 15px; border-top: 1px solid rgba(255,255,255,0.1); padding-top: 15px;"></div>
         <button class="action-btn" onclick="closeModal('examModal')" style="align-self:center; width:100%; margin-top: auto;">CLOSE</button>
     </div>
